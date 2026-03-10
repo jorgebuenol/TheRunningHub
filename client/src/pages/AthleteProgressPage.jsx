@@ -31,17 +31,21 @@ const TYPE_LABELS_ES = {
 };
 
 export default function AthleteProgressPage() {
-  const { profile } = useAuth();
+  const { user } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!profile?.athlete_id) { setLoading(false); return; }
-    api.getProgress(profile.athlete_id)
-      .then(setData)
+    if (!user) { setLoading(false); return; }
+    api.getMyProfile()
+      .then(athlete => {
+        if (!athlete?.id) return;
+        return api.getProgress(athlete.id);
+      })
+      .then(d => { if (d) setData(d); })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [profile?.athlete_id]);
+  }, [user]);
 
   if (loading) return <div className="text-volt font-display text-xl animate-pulse">CARGANDO...</div>;
   if (!data?.plan) return <div className="text-smoke text-center py-12">No tienes un plan activo.</div>;
