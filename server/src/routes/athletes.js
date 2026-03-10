@@ -15,7 +15,28 @@ athleteRoutes.get('/me', async (req, res, next) => {
       .single();
 
     if (error || !data) {
-      return res.status(404).json({ message: 'Athlete profile not found' });
+      // Auto-create athlete record for self-signed-up users
+      const { data: profile } = await req.supabase
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', req.user.id)
+        .single();
+
+      if (!profile) {
+        return res.status(404).json({ message: 'Athlete profile not found. Please contact your coach.' });
+      }
+
+      const { data: newAthlete, error: insertErr } = await req.supabase
+        .from('athletes')
+        .insert({ profile_id: req.user.id })
+        .select()
+        .single();
+
+      if (insertErr) {
+        return res.status(404).json({ message: 'Could not create athlete profile.' });
+      }
+
+      return res.json(newAthlete);
     }
 
     res.json(data);
