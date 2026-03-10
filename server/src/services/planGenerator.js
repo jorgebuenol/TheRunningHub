@@ -264,28 +264,43 @@ Rules:
 - phase must be one of: base, build, peak, taper, race
 - intensity must be one of: easy, moderate, hard, recovery
 - km_target is total planned weekly volume in km
-- notes is a brief sentence describing the training focus
+- notes: max 10 words describing the training focus
 - Consider altitude effects (Bogotá 2,640m), current weekly mileage (${athlete.weekly_km}km), and the 10% rule for volume progression
 - Build volume gradually — do not jump more than 10-15% week to week
 - Include a proper taper (1-3 weeks depending on race distance)
 - The last week should be phase "race" with reduced volume
 - recovery weeks every 3-4 weeks with reduced volume
-ONLY output valid JSON. No markdown, no explanation.`;
+Output ONLY the JSON array contents — I will provide the opening {"weeks":[  prefix.`;
 
   const response = await getAnthropic().messages.create({
     model: 'claude-sonnet-4-20250514',
-    max_tokens: 2000,
-    messages: [{ role: 'user', content: prompt }],
+    max_tokens: 2048,
+    messages: [
+      { role: 'user', content: prompt },
+      { role: 'assistant', content: '{"weeks":[' },
+    ],
   });
 
-  const content = response.content[0].text;
+  if (response.stop_reason === 'max_tokens') {
+    console.error(`Macro plan truncated (${response.usage?.output_tokens} tokens used)`);
+    throw new Error('AI response was truncated. Please try again.');
+  }
+
+  console.log(`Macro plan tokens: ${response.usage?.input_tokens} in / ${response.usage?.output_tokens} out`);
+  const content = '{"weeks":[' + response.content[0].text;
   return parseMacroResponse(content, weeksToRace);
 }
 
 function parseMacroResponse(text, weeksToRace) {
   let jsonStr = text.trim();
+  // Strip markdown fences if model added them despite prefill
   if (jsonStr.startsWith('```')) {
     jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+  }
+  // Strip trailing junk after closing brace
+  const lastBrace = jsonStr.lastIndexOf('}');
+  if (lastBrace !== -1 && lastBrace < jsonStr.length - 1) {
+    jsonStr = jsonStr.substring(0, lastBrace + 1);
   }
 
   const plan = JSON.parse(jsonStr);
@@ -445,22 +460,37 @@ IMPORTANT — session_structure rules:
 - For interval workouts also set intervals_detail: {"reps": 6, "distance_m": 800, "pace_sec_km": 240, "rest_seconds": 120, "rest_type": "jog"}
 - The sum of warm_up.distance_km + main_set distances + cool_down.distance_km should approximately equal the total distance_km.
 - description field remains a one-line summary for backward compatibility.
-ONLY output valid JSON. No markdown, no explanation.`;
+Output ONLY the JSON array contents — I will provide the opening {"workouts":[  prefix.`;
 
   const response = await getAnthropic().messages.create({
     model: 'claude-sonnet-4-20250514',
-    max_tokens: 4000,
-    messages: [{ role: 'user', content: prompt }],
+    max_tokens: 5000,
+    messages: [
+      { role: 'user', content: prompt },
+      { role: 'assistant', content: '{"workouts":[' },
+    ],
   });
 
-  const content = response.content[0].text;
+  if (response.stop_reason === 'max_tokens') {
+    console.error(`Weekly detail truncated (${response.usage?.output_tokens} tokens used)`);
+    throw new Error('AI response was truncated. Please try again.');
+  }
+
+  console.log(`Weekly detail tokens: ${response.usage?.input_tokens} in / ${response.usage?.output_tokens} out`);
+  const content = '{"workouts":[' + response.content[0].text;
   return parseWeeklyDetailResponse(content);
 }
 
 function parseWeeklyDetailResponse(text) {
   let jsonStr = text.trim();
+  // Strip markdown fences if model added them despite prefill
   if (jsonStr.startsWith('```')) {
     jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+  }
+  // Strip trailing junk after closing brace
+  const lastBrace = jsonStr.lastIndexOf('}');
+  if (lastBrace !== -1 && lastBrace < jsonStr.length - 1) {
+    jsonStr = jsonStr.substring(0, lastBrace + 1);
   }
 
   const result = JSON.parse(jsonStr);
