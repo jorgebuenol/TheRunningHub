@@ -258,6 +258,10 @@ export default function AthleteDetailPage() {
             CALENDAR
           </Link>
         )}
+        <Link to={`/athletes/${id}/progress`} className="btn-secondary flex items-center gap-2">
+          <TrendingUp size={16} />
+          PROGRESS
+        </Link>
         <Link to={`/athletes/${id}/load`} className="btn-secondary flex items-center gap-2">
           <BarChart3 size={16} />
           LOAD

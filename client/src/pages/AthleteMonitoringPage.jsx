@@ -168,7 +168,7 @@ export default function AthleteMonitoringPage() {
                     <td className="py-2 text-center">{r.motivation}/5</td>
                     <td className="py-2 text-center">
                       {r.pain_flag ? (
-                        <span className="text-red-400 text-xs">{r.pain_location} ({r.pain_severity})</span>
+                        <span className="text-red-400 text-xs">{r.pain_location}</span>
                       ) : (
                         <span className="text-smoke">—</span>
                       )}

@@ -76,6 +76,7 @@ export const api = {
 
   // Monitoring
   getMonitoring: (athleteId) => request(`/api/monitoring/${athleteId}`),
+  getProgress: (athleteId) => request(`/api/monitoring/${athleteId}/progress`),
 
   // AI Chat
   sendChatMessage: (athleteId, message, history = []) =>

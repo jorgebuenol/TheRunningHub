@@ -12,8 +12,10 @@ import MyPlanPage from './pages/MyPlanPage';
 import ReadinessCheckInPage from './pages/ReadinessCheckInPage';
 import AthleteMonitoringPage from './pages/AthleteMonitoringPage';
 import AthleteLoadPage from './pages/AthleteLoadPage';
+import CoachProgressPage from './pages/CoachProgressPage';
 import AIChatPage from './pages/AIChatPage';
 import MyProfilePage from './pages/MyProfilePage';
+import AthleteProgressPage from './pages/AthleteProgressPage';
 
 function ProtectedRoute({ children, coachOnly = false }) {
   const { user, profile, loading } = useAuth();
@@ -57,6 +59,8 @@ export default function App() {
         <Route path="/athletes/:id" element={<ProtectedRoute coachOnly><AthleteDetailPage /></ProtectedRoute>} />
         <Route path="/athletes/:id/monitoring" element={<ProtectedRoute coachOnly><AthleteMonitoringPage /></ProtectedRoute>} />
         <Route path="/athletes/:id/load" element={<ProtectedRoute coachOnly><AthleteLoadPage /></ProtectedRoute>} />
+        <Route path="/athletes/:id/progress" element={<ProtectedRoute coachOnly><CoachProgressPage /></ProtectedRoute>} />
+        <Route path="/progress" element={<ProtectedRoute coachOnly><CoachProgressPage /></ProtectedRoute>} />
         <Route path="/plans/:planId" element={<ProtectedRoute><PlanViewPage /></ProtectedRoute>} />
         <Route path="/calendar/:athleteId" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
         <Route path="/chat" element={<ProtectedRoute coachOnly><AIChatPage /></ProtectedRoute>} />
@@ -66,6 +70,7 @@ export default function App() {
         <Route path="/my-calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
         <Route path="/my-profile" element={<ProtectedRoute><MyProfilePage /></ProtectedRoute>} />
         <Route path="/readiness" element={<ProtectedRoute><ReadinessCheckInPage /></ProtectedRoute>} />
+        <Route path="/my-progress" element={<ProtectedRoute><AthleteProgressPage /></ProtectedRoute>} />
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { LayoutDashboard, Users, Calendar, CalendarDays, LogOut, Zap, User, MessageSquare, ClipboardCheck, UserCircle, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, CalendarDays, LogOut, Zap, User, MessageSquare, ClipboardCheck, UserCircle, Menu, X, TrendingUp } from 'lucide-react';
 
 export default function Layout() {
   const { profile, isCoach, signOut } = useAuth();
@@ -70,6 +70,10 @@ export default function Layout() {
                 <Users size={18} />
                 Athletes
               </NavLink>
+              <NavLink to="/progress" className={navLinkClass} onClick={handleNavClick}>
+                <TrendingUp size={18} />
+                Progress
+              </NavLink>
               <NavLink to="/chat" className={navLinkClass} onClick={handleNavClick}>
                 <MessageSquare size={18} />
                 AI Chat
@@ -88,6 +92,10 @@ export default function Layout() {
               <NavLink to="/my-profile" className={navLinkClass} onClick={handleNavClick}>
                 <UserCircle size={18} />
                 My Profile
+              </NavLink>
+              <NavLink to="/my-progress" className={navLinkClass} onClick={handleNavClick}>
+                <TrendingUp size={18} />
+                Progress
               </NavLink>
               <NavLink to="/readiness" className={navLinkClass} onClick={handleNavClick}>
                 <ClipboardCheck size={18} />
