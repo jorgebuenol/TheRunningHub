@@ -3,9 +3,15 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    overflow-x: hidden;
+  }
+
   body {
     @apply bg-carbon text-white antialiased;
     font-family: 'Barlow Condensed', sans-serif;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -32,32 +38,39 @@
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-smoke;
   }
+
+  /* Prevent iOS zoom on input focus */
+  @media (max-width: 767px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+  }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-volt text-carbon font-bold uppercase tracking-wider px-6 py-3
-           hover:bg-white transition-colors duration-150 text-sm;
+    @apply bg-volt text-carbon font-bold uppercase tracking-wider px-4 sm:px-6 py-3
+           hover:bg-white transition-colors duration-150 text-sm min-h-[44px];
   }
 
   .btn-secondary {
-    @apply border border-volt text-volt font-bold uppercase tracking-wider px-6 py-3
-           hover:bg-volt hover:text-carbon transition-colors duration-150 text-sm;
+    @apply border border-volt text-volt font-bold uppercase tracking-wider px-4 sm:px-6 py-3
+           hover:bg-volt hover:text-carbon transition-colors duration-150 text-sm min-h-[44px];
   }
 
   .btn-ghost {
-    @apply text-smoke font-semibold uppercase tracking-wider px-6 py-3
-           hover:text-white transition-colors duration-150 text-sm;
+    @apply text-smoke font-semibold uppercase tracking-wider px-4 sm:px-6 py-3
+           hover:text-white transition-colors duration-150 text-sm min-h-[44px];
   }
 
   .input-field {
     @apply w-full bg-steel border border-ash px-4 py-3 text-white
            placeholder:text-smoke focus:border-volt focus:outline-none
-           font-body text-sm;
+           font-body text-sm min-h-[44px];
   }
 
   .card {
-    @apply bg-steel border border-ash p-6;
+    @apply bg-steel border border-ash p-4 sm:p-6;
   }
 
   .label {
@@ -65,7 +78,7 @@
   }
 
   .stat-value {
-    @apply text-volt font-display text-3xl;
+    @apply text-volt font-display text-2xl sm:text-3xl;
   }
 
   .badge {

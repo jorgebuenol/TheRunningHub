@@ -185,7 +185,7 @@ export default function AthleteDetailPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="font-display text-4xl text-volt">{athlete.profiles?.full_name}</h1>
+          <h1 className="font-display text-3xl sm:text-4xl text-volt">{athlete.profiles?.full_name}</h1>
           <p className="text-smoke uppercase tracking-wider text-sm mt-1">{athlete.profiles?.email}</p>
         </div>
       </div>

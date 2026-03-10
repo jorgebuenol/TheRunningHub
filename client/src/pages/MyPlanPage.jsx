@@ -155,9 +155,9 @@ export default function MyPlanPage() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="font-display text-4xl text-volt">MY TRAINING</h1>
-        <p className="text-smoke uppercase tracking-wider text-sm mt-1">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="font-display text-3xl sm:text-4xl text-volt">MY TRAINING</h1>
+        <p className="text-smoke uppercase tracking-wider text-xs sm:text-sm mt-1">
           {athlete.goal_race} | {weeksToRace != null ? `${weeksToRace} weeks to race` : 'No race set'}
         </p>
       </div>
@@ -169,16 +169,16 @@ export default function MyPlanPage() {
         return (
           <Link
             to="/my-profile"
-            className="flex items-center justify-between px-5 py-4 mb-6 border border-volt bg-volt/5 hover:bg-volt/10 transition-colors"
+            className="flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-5 py-3 sm:py-4 mb-6 border border-volt bg-volt/5 hover:bg-volt/10 transition-colors gap-2 sm:gap-3"
           >
             <div className="flex items-center gap-3">
-              <User size={20} className="text-volt" />
+              <User size={20} className="text-volt flex-shrink-0" />
               <div>
                 <p className="font-bold uppercase text-sm">Complete Your Profile</p>
                 <p className="text-smoke text-xs">{onboarding.completed}/{onboarding.total} sections done</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 ml-8 sm:ml-0">
               <div className="w-24 h-2 bg-ash">
                 <div className="h-2 bg-volt" style={{ width: `${onboarding.percent}%` }} />
               </div>
@@ -219,10 +219,10 @@ export default function MyPlanPage() {
 
       {/* Today's workout highlight */}
       {todayWorkout && todayWorkout.workout_type !== 'rest' && (
-        <div className={`border-l-4 ${WORKOUT_COLORS[todayWorkout.workout_type] || ''} p-6 mb-8`}>
+        <div className={`border-l-4 ${WORKOUT_COLORS[todayWorkout.workout_type] || ''} p-4 sm:p-6 mb-6 sm:mb-8`}>
           <p className="text-smoke text-xs uppercase tracking-wider mb-1">TODAY</p>
-          <h2 className="font-display text-2xl text-volt">{todayWorkout.title}</h2>
-          <div className="flex gap-6 mt-3">
+          <h2 className="font-display text-xl sm:text-2xl text-volt">{todayWorkout.title}</h2>
+          <div className="flex flex-wrap gap-3 sm:gap-6 mt-3">
             {todayWorkout.distance_km && <span className="text-lg font-bold">{todayWorkout.distance_km}km</span>}
             {todayWorkout.duration_minutes && <span className="text-smoke">{todayWorkout.duration_minutes} min</span>}
             {todayWorkout.pace_range_min && todayWorkout.pace_range_max && (
@@ -232,16 +232,16 @@ export default function MyPlanPage() {
           {todayWorkout.description && <p className="text-sm mt-3">{todayWorkout.description}</p>}
           {todayWorkout.coach_notes && <p className="text-volt text-sm mt-2">Coach: {todayWorkout.coach_notes}</p>}
 
-          <div className="flex gap-3 mt-4">
+          <div className="flex flex-col sm:flex-row gap-3 mt-4">
             {todayWorkout.status !== 'completed' && (
-              <button onClick={() => markCompleted(todayWorkout.id)} className="btn-primary flex items-center gap-2">
+              <button onClick={() => markCompleted(todayWorkout.id)} className="btn-primary flex items-center justify-center gap-2">
                 <Check size={16} />
                 MARK COMPLETED
               </button>
             )}
             <button
               onClick={() => setFeedbackWorkout(todayWorkout)}
-              className="btn-secondary flex items-center gap-2"
+              className="btn-secondary flex items-center justify-center gap-2"
             >
               <BarChart3 size={16} />
               {workoutFeedbacks[todayWorkout.id] ? 'EDIT FEEDBACK' : 'LOG FEEDBACK'}
@@ -252,7 +252,67 @@ export default function MyPlanPage() {
 
       {/* This week */}
       <h2 className="font-display text-xl mb-4">THIS WEEK</h2>
-      <div className="grid grid-cols-7 gap-2 mb-8">
+
+      {/* Mobile: stacked list */}
+      <div className="sm:hidden space-y-2 mb-8">
+        {DAY_NAMES.map((day, i) => {
+          const workout = thisWeekWorkouts.find(w => {
+            const d = new Date(w.workout_date + 'T00:00:00');
+            return d.getDay() === (i === 6 ? 0 : i + 1);
+          });
+
+          const isToday = workout?.workout_date === today;
+          const colors = workout ? (WORKOUT_COLORS[workout.workout_type] || 'border-ash bg-ash/20') : 'border-ash/50';
+          const hasFeedback = workout && workoutFeedbacks[workout.id];
+
+          return (
+            <div
+              key={i}
+              className={`border-l-4 p-3 ${colors} ${isToday ? 'ring-1 ring-volt' : ''} flex items-center justify-between gap-3`}
+            >
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <p className={`text-xs font-bold w-8 flex-shrink-0 ${isToday ? 'text-volt' : 'text-smoke'}`}>{day}</p>
+                {workout ? (
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold uppercase truncate">{workout.title}</p>
+                      {workout.distance_km && <span className="text-volt text-xs font-display flex-shrink-0">{workout.distance_km}KM</span>}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {workout.status === 'completed' && (
+                        <span className="text-green-400 text-[10px] font-semibold">DONE</span>
+                      )}
+                      {hasFeedback && (
+                        <span className="text-volt text-[10px]">RPE {hasFeedback.rpe}</span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-smoke/50 text-xs">Rest</p>
+                )}
+              </div>
+              {workout && (
+                <div className="flex gap-2 flex-shrink-0">
+                  {workout.status !== 'completed' && (
+                    <button onClick={() => markCompleted(workout.id)} className="text-smoke hover:text-green-400 min-h-[44px] min-w-[44px] flex items-center justify-center">
+                      <Check size={16} />
+                    </button>
+                  )}
+                  <button onClick={() => setFeedbackWorkout(workout)} className="text-smoke hover:text-volt min-h-[44px] min-w-[44px] flex items-center justify-center" title="Log feedback">
+                    <BarChart3 size={16} />
+                  </button>
+                  <button onClick={() => { setNoteWorkout(workout); setNoteText(workout.athlete_notes || ''); }} className="text-smoke hover:text-volt min-h-[44px] min-w-[44px] flex items-center justify-center">
+                    <MessageSquare size={16} />
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop: 7 column grid */}
+      <div className="hidden sm:grid grid-cols-7 gap-2 mb-8">
         {DAY_NAMES.map((day, i) => {
           const workout = thisWeekWorkouts.find(w => {
             const d = new Date(w.workout_date + 'T00:00:00');
@@ -338,7 +398,7 @@ export default function MyPlanPage() {
       {/* Paces reference */}
       <div className="card">
         <h2 className="font-display text-xl mb-4">MY TRAINING PACES</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 text-center">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 sm:gap-4 text-center">
           <div>
             <p className="text-smoke text-xs uppercase">Easy</p>
             <p className="text-green-400 font-semibold">{formatPace(athlete.pace_easy_min)}-{formatPace(athlete.pace_easy_max)}</p>

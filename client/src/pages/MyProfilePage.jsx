@@ -210,7 +210,7 @@ export default function MyProfilePage() {
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-2">
-          <h1 className="font-display text-4xl text-volt">MY PROFILE</h1>
+          <h1 className="font-display text-3xl sm:text-4xl text-volt">MY PROFILE</h1>
           <div className="text-right">
             {saving && <span className="text-volt text-xs uppercase animate-pulse">SAVING...</span>}
             {!saving && lastSaved && (
@@ -361,7 +361,7 @@ function FieldLabel({ children, required }) {
 
 function PersonalDataFields({ athlete, updateField }) {
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div>
         <FieldLabel required>Age</FieldLabel>
         <input
@@ -428,7 +428,7 @@ function RunningHistoryFields({ athlete, updateField, vdot, paces }) {
         />
       </div>
       <p className="text-smoke text-xs uppercase tracking-wider">Race Times (enter at least one)</p>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {[
           { field: 'time_5k', label: '5K' },
           { field: 'time_10k', label: '10K' },
@@ -490,7 +490,7 @@ function GoalFields({ athlete, updateField }) {
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <FieldLabel required>Target Time</FieldLabel>
           <input
@@ -539,7 +539,7 @@ function AvailabilityFields({ athlete, updateField, toggleDay }) {
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <FieldLabel required>Start Time</FieldLabel>
           <input
@@ -581,7 +581,7 @@ function HealthFields({ athlete, updateField }) {
 function SleepFields({ athlete, updateJsonbField }) {
   const data = athlete.sleep_data || {};
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div>
         <FieldLabel required>Average Hours per Night</FieldLabel>
         <input
@@ -629,7 +629,7 @@ function NutritionFields({ athlete, updateJsonbField }) {
   const data = athlete.nutrition_data || {};
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <FieldLabel required>Diet Type</FieldLabel>
           <select
@@ -681,7 +681,7 @@ function NutritionFields({ athlete, updateJsonbField }) {
 function WorkLifeFields({ athlete, updateJsonbField }) {
   const data = athlete.work_life_data || {};
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div>
         <FieldLabel required>Work Schedule</FieldLabel>
         <select
@@ -777,7 +777,7 @@ function CurrentTrainingFields({ athlete, updateJsonbField }) {
           ))}
         </select>
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <FieldLabel required>Experience (years)</FieldLabel>
           <input
@@ -831,7 +831,7 @@ function TechnologyFields({ athlete, updateField }) {
           onChange={e => updateField('gps_watch_model', e.target.value)}
         />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <FieldLabel>Intervals.icu API Key</FieldLabel>
           <input

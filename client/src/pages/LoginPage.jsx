@@ -64,14 +64,14 @@ export default function LoginPage() {
       </div>
 
       {/* Right: Form */}
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-8">
         <div className="w-full max-w-md">
-          <div className="lg:hidden mb-12">
-            <h1 className="font-display text-4xl text-volt tracking-wider">THE RUN HUB</h1>
-            <p className="text-smoke uppercase tracking-widest text-sm mt-1">Getting Ready for the Colombia Splits</p>
+          <div className="lg:hidden mb-8 sm:mb-12">
+            <h1 className="font-display text-3xl sm:text-4xl text-volt tracking-wider">THE RUN HUB</h1>
+            <p className="text-smoke uppercase tracking-widest text-xs sm:text-sm mt-1">Getting Ready for the Colombia Splits</p>
           </div>
 
-          <h2 className="font-display text-3xl mb-8">
+          <h2 className="font-display text-2xl sm:text-3xl mb-6 sm:mb-8">
             {isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'}
           </h2>
 

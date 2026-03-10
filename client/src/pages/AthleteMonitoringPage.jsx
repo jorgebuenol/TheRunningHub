@@ -47,7 +47,7 @@ export default function AthleteMonitoringPage() {
       </Link>
 
       <div className="mb-8">
-        <h1 className="font-display text-4xl text-volt">MONITORING</h1>
+        <h1 className="font-display text-3xl sm:text-4xl text-volt">MONITORING</h1>
         <p className="text-smoke uppercase tracking-wider text-sm mt-1">
           {athlete.profiles?.full_name} — {athlete.goal_race || 'No race set'}
         </p>

@@ -153,7 +153,7 @@ export default function ReadinessCheckInPage() {
         <Check size={64} className="text-green-400 mx-auto mb-4" />
         <h2 className="font-display text-3xl text-volt mb-2">CHECK-IN SAVED</h2>
         <p className="text-smoke text-lg mb-2">Your readiness score today:</p>
-        <p className={`font-display text-6xl ${scoreColor}`}>{compositeScore}</p>
+        <p className={`font-display text-4xl sm:text-6xl ${scoreColor}`}>{compositeScore}</p>
         <p className="text-smoke text-sm mt-4">
           {compositeScore >= 3.5 ? 'Looking strong! Ready to train.' :
            compositeScore >= 2.5 ? 'Moderate readiness. Consider adjusting intensity.' :
@@ -172,7 +172,7 @@ export default function ReadinessCheckInPage() {
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-8">
-        <h1 className="font-display text-4xl text-volt">DAILY CHECK-IN</h1>
+        <h1 className="font-display text-3xl sm:text-4xl text-volt">DAILY CHECK-IN</h1>
         <p className="text-smoke uppercase tracking-wider text-sm mt-1">
           {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           {existingCheckin && ' — Updating existing check-in'}
@@ -199,7 +199,7 @@ export default function ReadinessCheckInPage() {
           <div className="flex items-center justify-between mb-3">
             <label className="text-sm font-bold uppercase tracking-wider">Sleep</label>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-smoke text-xs uppercase">Hours</label>
               <input
@@ -323,7 +323,7 @@ export default function ReadinessCheckInPage() {
         {/* Biometrics (optional) */}
         <div className="card">
           <label className="text-sm font-bold uppercase tracking-wider mb-3 block">Biometrics (Optional)</label>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="text-smoke text-xs uppercase">Resting HR</label>
               <input

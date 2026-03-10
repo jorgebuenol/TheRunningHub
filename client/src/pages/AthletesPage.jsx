@@ -27,11 +27,12 @@ export default function AthletesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="font-display text-4xl text-volt">ATHLETES</h1>
-        <Link to="/athletes/new" className="btn-primary flex items-center gap-2">
+      <div className="flex items-center justify-between mb-6 sm:mb-8 gap-3">
+        <h1 className="font-display text-3xl sm:text-4xl text-volt">ATHLETES</h1>
+        <Link to="/athletes/new" className="btn-primary flex items-center gap-2 flex-shrink-0 text-xs sm:text-sm">
           <Plus size={16} />
-          ADD ATHLETE
+          <span className="hidden sm:inline">ADD ATHLETE</span>
+          <span className="sm:hidden">ADD</span>
         </Link>
       </div>
 
@@ -47,8 +48,8 @@ export default function AthletesPage() {
         />
       </div>
 
-      {/* Table */}
-      <div className="border border-ash">
+      {/* Desktop Table */}
+      <div className="hidden md:block border border-ash">
         <div className="grid grid-cols-7 gap-4 px-6 py-3 bg-steel text-smoke text-xs uppercase tracking-wider font-semibold">
           <div className="col-span-2">Athlete</div>
           <div>VO2max</div>
@@ -86,6 +87,40 @@ export default function AthletesPage() {
 
         {filtered.length === 0 && (
           <div className="px-6 py-8 text-center text-smoke">
+            {search ? 'No athletes match your search' : 'No athletes registered yet'}
+          </div>
+        )}
+      </div>
+
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-3">
+        {filtered.map(athlete => (
+          <Link
+            key={athlete.id}
+            to={`/athletes/${athlete.id}`}
+            className="card flex items-center justify-between gap-3 group hover:border-volt transition-colors"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold uppercase text-sm truncate">{athlete.profiles?.full_name}</p>
+              <div className="flex items-center gap-3 mt-1 text-xs text-smoke">
+                {athlete.vdot && <span className="text-volt font-bold">V{athlete.vdot}</span>}
+                {athlete.goal_race && <span>{athlete.goal_race}</span>}
+                {athlete.weekly_km && <span>{athlete.weekly_km}km/w</span>}
+              </div>
+              <div className="mt-1">
+                {athlete.training_plans?.some(p => p.status === 'approved') ? (
+                  <span className="text-green-400 text-xs font-semibold uppercase">Plan Active</span>
+                ) : (
+                  <span className="text-smoke text-xs uppercase">No Plan</span>
+                )}
+              </div>
+            </div>
+            <ChevronRight size={18} className="text-smoke group-hover:text-volt transition-colors flex-shrink-0" />
+          </Link>
+        ))}
+
+        {filtered.length === 0 && (
+          <div className="card text-center py-8 text-smoke">
             {search ? 'No athletes match your search' : 'No athletes registered yet'}
           </div>
         )}

@@ -51,14 +51,15 @@ export default function DashboardPage() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="font-display text-4xl text-volt">DASHBOARD</h1>
-          <p className="text-smoke uppercase tracking-wider text-sm mt-1">Coach Overview</p>
+      <div className="flex items-center justify-between mb-6 sm:mb-8 gap-3">
+        <div className="min-w-0">
+          <h1 className="font-display text-3xl sm:text-4xl text-volt">DASHBOARD</h1>
+          <p className="text-smoke uppercase tracking-wider text-xs sm:text-sm mt-1">Coach Overview</p>
         </div>
-        <Link to="/athletes/new" className="btn-primary flex items-center gap-2">
+        <Link to="/athletes/new" className="btn-primary flex items-center gap-2 flex-shrink-0 text-xs sm:text-sm">
           <Plus size={16} />
-          ADD ATHLETE
+          <span className="hidden sm:inline">ADD ATHLETE</span>
+          <span className="sm:hidden">ADD</span>
         </Link>
       </div>
 
@@ -96,15 +97,15 @@ export default function DashboardPage() {
                   <AlertTriangle size={16} className="text-red-400" />
                   <span className="font-semibold uppercase text-sm">{a.name}</span>
                 </div>
-                <div className="flex items-center gap-4 text-xs">
+                <div className="flex items-center gap-2 sm:gap-4 text-xs flex-shrink-0">
                   {a.monitoring?.readiness_score !== null && a.monitoring.readiness_score < 2.5 && (
-                    <span className="text-red-400">Readiness: {a.monitoring.readiness_score}</span>
+                    <span className="text-red-400 hidden sm:inline">Readiness: {a.monitoring.readiness_score}</span>
                   )}
                   {a.monitoring?.acwr_zone === 'red' && (
-                    <span className="text-red-400">ACWR: {a.monitoring.acwr_ratio}</span>
+                    <span className="text-red-400 hidden sm:inline">ACWR: {a.monitoring.acwr_ratio}</span>
                   )}
                   {a.monitoring?.pain_flag && (
-                    <span className="text-red-400">Pain: {a.monitoring.pain_location}</span>
+                    <span className="text-red-400 hidden sm:inline">Pain: {a.monitoring.pain_location}</span>
                   )}
                   <ChevronRight size={14} className="text-smoke" />
                 </div>
@@ -116,7 +117,7 @@ export default function DashboardPage() {
 
       {/* Athletes Grid */}
       <div className="mb-4">
-        <h2 className="font-display text-2xl mb-4">ATHLETES</h2>
+        <h2 className="font-display text-xl sm:text-2xl mb-4">ATHLETES</h2>
       </div>
 
       {athletes.length === 0 ? (

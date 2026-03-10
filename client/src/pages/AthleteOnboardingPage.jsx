@@ -104,25 +104,25 @@ export default function AthleteOnboardingPage() {
   const steps = [
     { title: 'ACCOUNT', subtitle: 'Login credentials' },
     { title: 'BODY', subtitle: 'Physical profile' },
-    { title: 'PERFORMANCE', subtitle: 'Race times & VO2max' },
+    { title: 'TIMES', subtitle: 'Race times' },
     { title: 'GOAL', subtitle: 'Target race' },
-    { title: 'SCHEDULE', subtitle: 'Availability' },
+    { title: 'SCHED', subtitle: 'Availability' },
     { title: 'EXTRAS', subtitle: 'Gear & integrations' },
   ];
 
   return (
     <div className="max-w-3xl mx-auto">
-      <h1 className="font-display text-4xl text-volt mb-2">NEW ATHLETE</h1>
-      <p className="text-smoke uppercase tracking-wider text-sm mb-8">Onboarding</p>
+      <h1 className="font-display text-3xl sm:text-4xl text-volt mb-2">NEW ATHLETE</h1>
+      <p className="text-smoke uppercase tracking-wider text-sm mb-6 sm:mb-8">Onboarding</p>
 
       {/* Step indicator */}
-      <div className="flex items-center gap-1 mb-8">
+      <div className="flex items-center gap-0.5 sm:gap-1 mb-6 sm:mb-8">
         {steps.map((s, i) => (
-          <div key={i} className="flex-1">
+          <div key={i} className="flex-1 min-w-0">
             <div
               className={`h-1 ${i <= step ? 'bg-volt' : 'bg-ash'} transition-colors`}
             />
-            <p className={`text-xs mt-2 uppercase tracking-wider ${
+            <p className={`text-[10px] sm:text-xs mt-1 sm:mt-2 uppercase tracking-wider truncate ${
               i === step ? 'text-volt font-semibold' : 'text-smoke'
             }`}>
               {s.title}
@@ -151,7 +151,7 @@ export default function AthleteOnboardingPage() {
         {step === 1 && (
           <div className="space-y-4">
             <h2 className="font-display text-xl mb-4">PHYSICAL PROFILE</h2>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Age" type="number" value={form.age} onChange={v => update('age', v)} placeholder="28" />
               <Field label="Weight (kg)" type="number" value={form.weight_kg} onChange={v => update('weight_kg', v)} placeholder="65" />
               <Field label="Height (cm)" type="number" value={form.height_cm} onChange={v => update('height_cm', v)} placeholder="170" />
@@ -165,7 +165,7 @@ export default function AthleteOnboardingPage() {
           <div className="space-y-4">
             <h2 className="font-display text-xl mb-4">RACE TIMES & VO2max</h2>
             <p className="text-smoke text-sm mb-4">Enter recent race times (MM:SS or H:MM:SS). At least one is required.</p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="5K Time" value={form.time_5k} onChange={v => update('time_5k', v)} placeholder="22:30" />
               <Field label="10K Time" value={form.time_10k} onChange={v => update('time_10k', v)} placeholder="47:00" />
               <Field label="Half Marathon" value={form.time_half_marathon} onChange={v => update('time_half_marathon', v)} placeholder="1:45:00" />
@@ -178,7 +178,7 @@ export default function AthleteOnboardingPage() {
                   <Zap size={20} className="text-volt" />
                   <h3 className="font-display text-xl text-volt">VO2max: {previewVdot}</h3>
                 </div>
-                <div className="grid grid-cols-3 gap-4 text-sm">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
                   <PaceDisplay label="Easy" value={`${formatPace(previewPaces.easy_min)} - ${formatPace(previewPaces.easy_max)}`} />
                   <PaceDisplay label="Tempo" value={formatPace(previewPaces.tempo)} />
                   <PaceDisplay label="Threshold" value={formatPace(previewPaces.lt)} />
@@ -196,12 +196,12 @@ export default function AthleteOnboardingPage() {
             <h2 className="font-display text-xl mb-4">RACE GOAL</h2>
             <div>
               <label className="label">Goal Race</label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {RACES.map(race => (
                   <button
                     key={race}
                     onClick={() => update('goal_race', race)}
-                    className={`py-3 text-sm font-bold uppercase tracking-wider border transition-colors ${
+                    className={`py-3 text-sm font-bold uppercase tracking-wider border transition-colors min-h-[44px] ${
                       form.goal_race === race
                         ? 'bg-volt text-carbon border-volt'
                         : 'border-ash text-smoke hover:border-volt hover:text-white'
@@ -222,12 +222,12 @@ export default function AthleteOnboardingPage() {
             <h2 className="font-display text-xl mb-4">TRAINING SCHEDULE</h2>
             <div>
               <label className="label">Available Days</label>
-              <div className="grid grid-cols-7 gap-2">
+              <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
                 {DAYS.map(day => (
                   <button
                     key={day}
                     onClick={() => toggleDay(day)}
-                    className={`py-3 text-xs font-bold uppercase tracking-wider border transition-colors ${
+                    className={`py-3 text-xs font-bold uppercase tracking-wider border transition-colors min-h-[44px] ${
                       form.available_days.includes(day)
                         ? 'bg-volt text-carbon border-volt'
                         : 'border-ash text-smoke hover:border-volt'
@@ -238,7 +238,7 @@ export default function AthleteOnboardingPage() {
                 ))}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Start Time" type="time" value={form.available_time_start} onChange={v => update('available_time_start', v)} />
               <Field label="End Time" type="time" value={form.available_time_end} onChange={v => update('available_time_end', v)} />
             </div>
@@ -260,7 +260,7 @@ export default function AthleteOnboardingPage() {
             </div>
             <div className="border-t border-ash pt-4 mt-6">
               <h3 className="font-body font-bold uppercase tracking-wider text-sm mb-4">INTERVALS.ICU (OPTIONAL)</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="API Key" value={form.intervals_icu_api_key} onChange={v => update('intervals_icu_api_key', v)} placeholder="Your API key" />
                 <Field label="Athlete ID" value={form.intervals_icu_athlete_id} onChange={v => update('intervals_icu_athlete_id', v)} placeholder="i12345" />
               </div>

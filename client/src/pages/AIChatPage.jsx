@@ -74,7 +74,7 @@ export default function AIChatPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="font-display text-4xl text-volt">AI COACH CHAT</h1>
+          <h1 className="font-display text-3xl sm:text-4xl text-volt">AI COACH CHAT</h1>
           <p className="text-smoke uppercase tracking-wider text-sm mt-1">
             Discuss athlete performance with AI
           </p>

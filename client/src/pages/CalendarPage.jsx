@@ -231,21 +231,23 @@ export default function CalendarPage() {
       </Link>
 
       {/* ─── Navigation bar ─── */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-        <h1 className="font-display text-3xl text-volt">TRAINING CALENDAR</h1>
+      <div className="flex flex-col gap-3 sm:gap-4 mb-6">
+        <div className="flex items-center justify-between">
+          <h1 className="font-display text-2xl sm:text-3xl text-volt">TRAINING CALENDAR</h1>
+        </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {/* View toggle */}
           <div className="flex border border-ash">
             <button
               onClick={() => setView('week')}
-              className={`px-3 py-1.5 text-xs uppercase font-bold tracking-wider transition-colors ${view === 'week' ? 'bg-volt text-carbon' : 'text-smoke hover:text-white'}`}
+              className={`px-3 py-2 text-xs uppercase font-bold tracking-wider transition-colors min-h-[44px] ${view === 'week' ? 'bg-volt text-carbon' : 'text-smoke hover:text-white'}`}
             >
               <span className="flex items-center gap-1"><CalendarIcon size={14} /> Week</span>
             </button>
             <button
               onClick={() => setView('month')}
-              className={`px-3 py-1.5 text-xs uppercase font-bold tracking-wider transition-colors ${view === 'month' ? 'bg-volt text-carbon' : 'text-smoke hover:text-white'}`}
+              className={`px-3 py-2 text-xs uppercase font-bold tracking-wider transition-colors min-h-[44px] ${view === 'month' ? 'bg-volt text-carbon' : 'text-smoke hover:text-white'}`}
             >
               <span className="flex items-center gap-1"><LayoutGrid size={14} /> Month</span>
             </button>
@@ -253,19 +255,19 @@ export default function CalendarPage() {
 
           {/* Navigation */}
           <div className="flex items-center gap-1">
-            <button onClick={goPrev} className="p-2 border border-ash hover:border-volt text-smoke hover:text-volt transition-colors">
+            <button onClick={goPrev} className="p-2 border border-ash hover:border-volt text-smoke hover:text-volt transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center">
               <ChevronLeft size={18} />
             </button>
-            <button onClick={goToday} className="px-3 py-1.5 border border-ash hover:border-volt text-smoke hover:text-volt text-xs uppercase font-bold tracking-wider transition-colors">
+            <button onClick={goToday} className="px-3 py-2 border border-ash hover:border-volt text-smoke hover:text-volt text-xs uppercase font-bold tracking-wider transition-colors min-h-[44px]">
               Today
             </button>
-            <button onClick={goNext} className="p-2 border border-ash hover:border-volt text-smoke hover:text-volt transition-colors">
+            <button onClick={goNext} className="p-2 border border-ash hover:border-volt text-smoke hover:text-volt transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center">
               <ChevronRight size={18} />
             </button>
           </div>
 
           {raceDate && (
-            <button onClick={goRaceDay} className="px-3 py-1.5 border border-volt text-volt hover:bg-volt hover:text-carbon text-xs uppercase font-bold tracking-wider transition-colors flex items-center gap-1">
+            <button onClick={goRaceDay} className="px-3 py-2 border border-volt text-volt hover:bg-volt hover:text-carbon text-xs uppercase font-bold tracking-wider transition-colors flex items-center gap-1 min-h-[44px]">
               <Flag size={14} /> Race Day
             </button>
           )}
@@ -273,9 +275,9 @@ export default function CalendarPage() {
       </div>
 
       {/* Period label + phase */}
-      <div className="flex flex-wrap items-center justify-between mb-4 px-1">
-        <div className="flex items-center gap-3">
-          <span className="font-display text-lg">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4 px-1">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <span className="font-display text-base sm:text-lg">
             {view === 'week'
               ? `${format(weekDates[0], 'MMM d')} — ${format(weekDates[6], 'MMM d, yyyy')}`
               : format(currentDate, 'MMMM yyyy').toUpperCase()
@@ -285,34 +287,30 @@ export default function CalendarPage() {
             <span className="badge">{currentWeekData.phase.toUpperCase()}</span>
           )}
           {view === 'week' && currentWeekData && (
-            <span className="text-smoke text-sm">Week {currentWeekData.week_number}</span>
+            <span className="text-smoke text-xs sm:text-sm">Wk {currentWeekData.week_number}</span>
           )}
         </div>
         {view === 'week' && currentWeekData?.total_km && (
-          <span className="text-volt font-display">{currentWeekData.total_km}KM PLAN</span>
+          <span className="text-volt font-display text-sm sm:text-base">{currentWeekData.total_km}KM</span>
         )}
       </div>
 
       {/* ─── Week Summary Bar ─── */}
       {view === 'week' && (
-        <div className="border border-ash bg-steel/30 p-4 mb-6">
-          <div className="flex flex-wrap items-center gap-6 text-sm">
+        <div className="border border-ash bg-steel/30 p-3 sm:p-4 mb-6">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-3 sm:gap-6 text-sm">
             <div>
-              <span className="text-smoke uppercase text-xs tracking-wider">Planned</span>
-              <span className="ml-2 font-semibold">{weekSummary.plannedKm.toFixed(1)} km</span>
-              <span className="text-smoke mx-1">|</span>
-              <span className="font-semibold">{Math.floor(weekSummary.plannedMin / 60)}h {weekSummary.plannedMin % 60}m</span>
+              <span className="text-smoke uppercase text-[10px] sm:text-xs tracking-wider block sm:inline">Planned</span>
+              <span className="sm:ml-2 font-semibold block sm:inline">{weekSummary.plannedKm.toFixed(1)} km</span>
             </div>
             <div>
-              <span className="text-smoke uppercase text-xs tracking-wider">Completed</span>
-              <span className="ml-2 text-green-400 font-semibold">{weekSummary.completedKm.toFixed(1)} km</span>
-              <span className="text-smoke mx-1">|</span>
-              <span className="text-green-400 font-semibold">{Math.floor(weekSummary.completedMin / 60)}h {weekSummary.completedMin % 60}m</span>
+              <span className="text-smoke uppercase text-[10px] sm:text-xs tracking-wider block sm:inline">Completed</span>
+              <span className="sm:ml-2 text-green-400 font-semibold block sm:inline">{weekSummary.completedKm.toFixed(1)} km</span>
             </div>
             {weekSummary.acwr != null && (
               <div>
-                <span className="text-smoke uppercase text-xs tracking-wider">ACWR</span>
-                <span className={`ml-2 font-bold ${
+                <span className="text-smoke uppercase text-[10px] sm:text-xs tracking-wider block sm:inline">ACWR</span>
+                <span className={`sm:ml-2 font-bold block sm:inline ${
                   weekSummary.acwrZone === 'green' ? 'text-green-400' :
                   weekSummary.acwrZone === 'amber' ? 'text-yellow-400' :
                   weekSummary.acwrZone === 'red' ? 'text-red-400' : 'text-blue-400'
@@ -322,7 +320,7 @@ export default function CalendarPage() {
               </div>
             )}
             {weekSummary.plannedKm > 0 && (
-              <div className="flex-1 min-w-[120px]">
+              <div className="col-span-2 sm:flex-1 sm:min-w-[120px]">
                 <div className="w-full bg-ash h-2">
                   <div
                     className="bg-green-500 h-2 transition-all"
@@ -349,7 +347,7 @@ export default function CalendarPage() {
               <div
                 key={key}
                 onClick={() => workout && setSelectedWorkout(workout)}
-                className={`border-l-4 ${colors.border} ${colors.bg} p-4 min-h-[180px] cursor-pointer hover:bg-white/5 transition-colors
+                className={`border-l-4 ${colors.border} ${colors.bg} p-3 sm:p-4 min-h-[80px] sm:min-h-[180px] cursor-pointer hover:bg-white/5 transition-colors
                   ${today ? 'ring-2 ring-volt ring-inset' : ''}
                   ${isRace ? 'ring-2 ring-volt' : ''}
                 `}
@@ -403,15 +401,15 @@ export default function CalendarPage() {
 
       {/* ─── Month View ─── */}
       {view === 'month' && (
-        <>
+        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
           {/* Day headers */}
-          <div className="grid grid-cols-7 gap-1 mb-1">
+          <div className="grid grid-cols-7 gap-px sm:gap-1 mb-px sm:mb-1 min-w-[320px]">
             {DAY_NAMES.map(d => (
-              <div key={d} className="text-center text-smoke text-xs font-bold py-1">{d}</div>
+              <div key={d} className="text-center text-smoke text-[10px] sm:text-xs font-bold py-1">{d}</div>
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-1 mb-6">
+          <div className="grid grid-cols-7 gap-px sm:gap-1 mb-6 min-w-[320px]">
             {monthDays.map((date) => {
               const key = format(date, 'yyyy-MM-dd');
               const workout = workoutsByDate[key];
@@ -424,29 +422,29 @@ export default function CalendarPage() {
                 <div
                   key={key}
                   onClick={() => workout && setSelectedWorkout(workout)}
-                  className={`p-2 min-h-[90px] border border-ash/30 transition-colors
+                  className={`p-1 sm:p-2 min-h-[52px] sm:min-h-[90px] border border-ash/30 transition-colors
                     ${inMonth ? 'bg-steel/20' : 'bg-carbon/50 opacity-40'}
                     ${today ? 'ring-1 ring-volt ring-inset' : ''}
                     ${workout ? 'cursor-pointer hover:bg-white/5' : ''}
                   `}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className={`text-xs ${today ? 'text-volt font-bold' : 'text-smoke'}`}>
+                  <div className="flex items-center justify-between mb-0.5 sm:mb-1">
+                    <span className={`text-[10px] sm:text-xs ${today ? 'text-volt font-bold' : 'text-smoke'}`}>
                       {format(date, 'd')}
                     </span>
-                    {isRace && <Flag size={10} className="text-volt" />}
+                    {isRace && <Flag size={8} className="text-volt sm:w-[10px] sm:h-[10px]" />}
                   </div>
 
                   {workout && workout.workout_type !== 'rest' && (
-                    <div className={`${colors.bg} border-l-2 ${colors.border} px-1.5 py-1 mt-1`}>
-                      <p className={`text-[10px] font-bold uppercase ${colors.text} truncate`}>
+                    <div className={`${colors.bg} border-l-2 ${colors.border} px-0.5 sm:px-1.5 py-0.5 sm:py-1`}>
+                      <p className={`text-[8px] sm:text-[10px] font-bold uppercase ${colors.text} truncate`}>
                         {colors.label}
                       </p>
                       {workout.distance_km > 0 && (
-                        <p className="text-white text-[10px] font-semibold">{workout.distance_km}km</p>
+                        <p className="text-white text-[8px] sm:text-[10px] font-semibold hidden sm:block">{workout.distance_km}km</p>
                       )}
                       {workout.status === 'completed' && (
-                        <Check size={10} className="text-green-400 mt-0.5" />
+                        <Check size={8} className="text-green-400 mt-0.5 hidden sm:block" />
                       )}
                     </div>
                   )}
@@ -454,7 +452,7 @@ export default function CalendarPage() {
               );
             })}
           </div>
-        </>
+        </div>
       )}
 
       {/* ─── Workout Detail Panel ─── */}
@@ -595,7 +593,7 @@ export default function CalendarPage() {
 
       {/* ─── Week Overview Bar ─── */}
       {plan?.plan_weeks?.length > 1 && (
-        <div className="flex gap-0.5 mt-4">
+        <div className="flex gap-px sm:gap-0.5 mt-4 overflow-x-auto">
           {plan.plan_weeks.map((w, i) => {
             // Check if this plan week matches the currently displayed week
             const isActive = currentWeekData?.week_number === w.week_number;
@@ -637,14 +635,14 @@ function WorkoutDetailPanel({ workout, isCoach, planStatus, onClose, onEdit, onF
   return (
     <div className="card mb-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <h2 className="font-display text-xl">{workout.title}</h2>
+      <div className="flex items-start justify-between mb-4 gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+          <h2 className="font-display text-lg sm:text-xl">{workout.title}</h2>
           <span className={`text-xs font-bold uppercase px-2 py-0.5 ${colors.bg} ${colors.text} border ${colors.border}`}>
             {colors.label}
           </span>
         </div>
-        <button onClick={onClose} className="text-smoke hover:text-white"><X size={20} /></button>
+        <button onClick={onClose} className="text-smoke hover:text-white flex-shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"><X size={20} /></button>
       </div>
 
       {/* Stats grid */}
