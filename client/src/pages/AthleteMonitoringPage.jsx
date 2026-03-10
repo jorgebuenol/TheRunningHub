@@ -4,8 +4,8 @@ import { api } from '../lib/api';
 import Sparkline from '../components/ui/Sparkline';
 import { ArrowLeft, AlertTriangle, TrendingUp, Activity, Heart, Shield } from 'lucide-react';
 
-const ACWR_COLORS = { green: 'text-green-400', amber: 'text-yellow-400', red: 'text-red-400' };
-const ACWR_BG = { green: 'bg-green-500/10 border-green-500', amber: 'bg-yellow-500/10 border-yellow-500', red: 'bg-red-500/10 border-red-500' };
+const ACWR_COLORS = { green: 'text-green-400', yellow: 'text-yellow-400', red: 'text-red-400' };
+const ACWR_BG = { green: 'bg-green-500/10 border-green-500', yellow: 'bg-yellow-500/10 border-yellow-500', red: 'bg-red-500/10 border-red-500' };
 const FEELING_EMOJI = { great: '😄', good: '😊', ok: '😐', bad: '😟', terrible: '😫' };
 
 export default function AthleteMonitoringPage() {

@@ -6,7 +6,7 @@ import { getOverallProgress, getSectionStatus, ONBOARDING_SECTIONS } from '@shar
 import {
   Zap, Calendar, Target, TrendingUp, RefreshCw, Send, ArrowLeft,
   Activity, Shield, AlertTriangle, CheckCircle, Circle, CircleDot,
-  User, Heart, Moon, Apple, Briefcase, Dumbbell, Smartphone, MessageSquare,
+  User, Heart, Moon, Apple, Briefcase, Dumbbell, Smartphone, MessageSquare, BarChart3,
 } from 'lucide-react';
 
 // ─── Lookup constants (for human-readable labels) ───────────────────────────
@@ -207,6 +207,10 @@ export default function AthleteDetailPage() {
             CALENDAR
           </Link>
         )}
+        <Link to={`/athletes/${id}/load`} className="btn-secondary flex items-center gap-2">
+          <BarChart3 size={16} />
+          LOAD
+        </Link>
         <Link to="/chat" className="btn-secondary flex items-center gap-2">
           <MessageSquare size={16} />
           AI CHAT
@@ -238,7 +242,7 @@ export default function AthleteDetailPage() {
           value={monitoring?.acwr?.ratio ?? '--'}
           color={
             monitoring?.acwr?.zone === 'green' ? 'text-green-400' :
-            monitoring?.acwr?.zone === 'amber' ? 'text-yellow-400' :
+            monitoring?.acwr?.zone === 'yellow' ? 'text-yellow-400' :
             monitoring?.acwr?.ratio ? 'text-red-400' : undefined
           }
         />
@@ -443,7 +447,7 @@ export default function AthleteDetailPage() {
               </p>
               <p className={`font-display text-xl ${
                 monitoring.acwr?.zone === 'green' ? 'text-green-400' :
-                monitoring.acwr?.zone === 'amber' ? 'text-yellow-400' : 'text-red-400'
+                monitoring.acwr?.zone === 'yellow' ? 'text-yellow-400' : 'text-red-400'
               }`}>
                 {monitoring.acwr?.ratio ?? '--'}
               </p>

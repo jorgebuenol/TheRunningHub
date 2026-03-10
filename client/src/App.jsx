@@ -11,6 +11,7 @@ import CalendarPage from './pages/CalendarPage';
 import MyPlanPage from './pages/MyPlanPage';
 import ReadinessCheckInPage from './pages/ReadinessCheckInPage';
 import AthleteMonitoringPage from './pages/AthleteMonitoringPage';
+import AthleteLoadPage from './pages/AthleteLoadPage';
 import AIChatPage from './pages/AIChatPage';
 import MyProfilePage from './pages/MyProfilePage';
 
@@ -55,6 +56,7 @@ export default function App() {
         <Route path="/athletes/new" element={<ProtectedRoute coachOnly><AthleteOnboardingPage /></ProtectedRoute>} />
         <Route path="/athletes/:id" element={<ProtectedRoute coachOnly><AthleteDetailPage /></ProtectedRoute>} />
         <Route path="/athletes/:id/monitoring" element={<ProtectedRoute coachOnly><AthleteMonitoringPage /></ProtectedRoute>} />
+        <Route path="/athletes/:id/load" element={<ProtectedRoute coachOnly><AthleteLoadPage /></ProtectedRoute>} />
         <Route path="/plans/:planId" element={<ProtectedRoute><PlanViewPage /></ProtectedRoute>} />
         <Route path="/calendar/:athleteId" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
         <Route path="/chat" element={<ProtectedRoute coachOnly><AIChatPage /></ProtectedRoute>} />

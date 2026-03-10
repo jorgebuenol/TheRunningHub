@@ -2,9 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import Sparkline from '../components/ui/Sparkline';
-import { Users, Target, Calendar, TrendingUp, ChevronRight, Plus, Zap, AlertTriangle, Shield, Activity, UserX } from 'lucide-react';
+import { Users, Target, Calendar, TrendingUp, ChevronRight, Plus, Zap, AlertTriangle, Shield, Activity, UserX, Heart } from 'lucide-react';
 
-const ACWR_COLORS = { green: 'bg-green-400', amber: 'bg-yellow-400', red: 'bg-red-400' };
+const ACWR_ZONE = {
+  green:  { bg: 'bg-green-500/20',  border: 'border-green-500',  text: 'text-green-400',  label: 'OPTIMAL' },
+  yellow: { bg: 'bg-yellow-500/20', border: 'border-yellow-500', text: 'text-yellow-400', label: 'CAUTION' },
+  red:    { bg: 'bg-red-500/20',    border: 'border-red-500',    text: 'text-red-400',    label: 'DANGER' },
+};
 
 export default function DashboardPage() {
   const [dashboard, setDashboard] = useState(null);
@@ -39,13 +43,14 @@ export default function DashboardPage() {
   const upcoming = athletes.filter(a => a.weeks_to_race && a.weeks_to_race <= 4);
   const incompleteProfiles = athletes.filter(a => a.onboarding && !a.onboarding.isComplete);
 
-  // Flagged athletes: low readiness, high ACWR, or pain
+  // Flagged athletes: ACWR >1.3, avg RPE >8 for 3+ days, pain in 7 days, low readiness
   const flagged = athletes.filter(a => {
     const m = a.monitoring;
     if (!m) return false;
     return (m.readiness_score !== null && m.readiness_score < 2.5) ||
-           m.acwr_zone === 'red' ||
-           m.pain_flag;
+           m.acwr_zone === 'red' || m.acwr_zone === 'yellow' ||
+           m.pain_flag_7d ||
+           m.rpe_high_days >= 3;
   });
 
   return (
@@ -87,30 +92,38 @@ export default function DashboardPage() {
             FLAGGED ATHLETES
           </h2>
           <div className="space-y-2">
-            {flagged.map(a => (
-              <Link
-                key={a.id}
-                to={`/athletes/${a.id}/monitoring`}
-                className="flex items-center justify-between px-4 py-3 border border-red-500/30 bg-red-900/10 hover:border-red-500 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <AlertTriangle size={16} className="text-red-400" />
-                  <span className="font-semibold uppercase text-sm">{a.name}</span>
-                </div>
-                <div className="flex items-center gap-2 sm:gap-4 text-xs flex-shrink-0">
-                  {a.monitoring?.readiness_score !== null && a.monitoring.readiness_score < 2.5 && (
-                    <span className="text-red-400 hidden sm:inline">Readiness: {a.monitoring.readiness_score}</span>
-                  )}
-                  {a.monitoring?.acwr_zone === 'red' && (
-                    <span className="text-red-400 hidden sm:inline">ACWR: {a.monitoring.acwr_ratio}</span>
-                  )}
-                  {a.monitoring?.pain_flag && (
-                    <span className="text-red-400 hidden sm:inline">Pain: {a.monitoring.pain_location}</span>
-                  )}
-                  <ChevronRight size={14} className="text-smoke" />
-                </div>
-              </Link>
-            ))}
+            {flagged.map(a => {
+              const m = a.monitoring;
+              return (
+                <Link
+                  key={a.id}
+                  to={`/athletes/${a.id}/load`}
+                  className="flex items-center justify-between px-4 py-3 border border-red-500/30 bg-red-900/10 hover:border-red-500 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <AlertTriangle size={16} className="text-red-400" />
+                    <span className="font-semibold uppercase text-sm">{a.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 sm:gap-4 text-xs flex-shrink-0">
+                    {(m?.acwr_zone === 'red' || m?.acwr_zone === 'yellow') && (
+                      <span className={`hidden sm:inline ${m.acwr_zone === 'red' ? 'text-red-400' : 'text-yellow-400'}`}>
+                        ACWR: {m.acwr_ratio}
+                      </span>
+                    )}
+                    {m?.rpe_high_days >= 3 && (
+                      <span className="text-orange-400 hidden sm:inline">RPE High {m.rpe_high_days}d</span>
+                    )}
+                    {m?.pain_flag_7d && (
+                      <span className="text-red-400 hidden sm:inline">Pain</span>
+                    )}
+                    {m?.readiness_score !== null && m.readiness_score < 2.5 && (
+                      <span className="text-red-400 hidden sm:inline">Readiness: {m.readiness_score}</span>
+                    )}
+                    <ChevronRight size={14} className="text-smoke" />
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}
@@ -161,28 +174,32 @@ function AthleteCard({ athlete }) {
     : 'text-yellow-400';
 
   const m = athlete.monitoring;
+  const zone = m?.acwr_zone ? (ACWR_ZONE[m.acwr_zone] || ACWR_ZONE.green) : null;
 
   // Readiness color
-  const readinessColor = m?.readiness_score >= 3.5 ? 'text-green-400 bg-green-500/20' :
-                          m?.readiness_score >= 2.5 ? 'text-yellow-400 bg-yellow-500/20' :
-                          m?.readiness_score ? 'text-red-400 bg-red-500/20' : null;
+  const readinessColor = m?.readiness_score >= 3.5 ? 'text-green-400' :
+                          m?.readiness_score >= 2.5 ? 'text-yellow-400' :
+                          m?.readiness_score ? 'text-red-400' : null;
+
+  // Auto-flag: ACWR >1.3, avg RPE >8 for 3+ days, pain in 7 days
+  const hasFlag = m && (
+    (m.acwr_ratio > 1.3) ||
+    (m.rpe_high_days >= 3) ||
+    m.pain_flag_7d
+  );
 
   return (
     <Link to={`/athletes/${athlete.id}`} className="card hover:border-volt transition-colors group">
       <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="font-body font-bold text-lg uppercase">{athlete.name}</h3>
-          <p className="text-smoke text-xs">{athlete.email}</p>
+        <div className="min-w-0">
+          <h3 className="font-body font-bold text-lg uppercase truncate">{athlete.name}</h3>
+          <p className="text-smoke text-xs truncate">{athlete.email}</p>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Monitoring indicators */}
-          {m?.pain_flag && (
-            <span title="Pain flag active" className="text-red-400">
-              <AlertTriangle size={14} />
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {hasFlag && (
+            <span title="Athlete flagged — check Load page" className="text-red-400">
+              <AlertTriangle size={16} />
             </span>
-          )}
-          {m?.acwr_zone && (
-            <span title={`ACWR: ${m.acwr_ratio}`} className={`w-2.5 h-2.5 rounded-full ${ACWR_COLORS[m.acwr_zone]}`} />
           )}
           <ChevronRight size={20} className="text-smoke group-hover:text-volt transition-colors" />
         </div>
@@ -203,27 +220,48 @@ function AthleteCard({ athlete }) {
         </div>
       </div>
 
-      {/* Monitoring row */}
-      {m && (m.readiness_score || m.avg_rpe || m.rpe_sparkline?.length > 0) && (
-        <div className="flex items-center gap-3 mb-3 py-2 border-t border-b border-ash">
+      {/* Monitoring badges row */}
+      {m && (
+        <div className="flex flex-wrap items-center gap-2 mb-3 py-2 border-t border-b border-ash">
+          {/* ACWR Badge */}
+          {zone && m.acwr_ratio > 0 && (
+            <div className={`flex items-center gap-1.5 px-2 py-1 border ${zone.border} ${zone.bg}`}>
+              <Shield size={12} className={zone.text} />
+              <span className={`text-xs font-bold ${zone.text}`}>{m.acwr_ratio}</span>
+            </div>
+          )}
+
+          {/* Readiness */}
           {readinessColor && (
             <div className="flex items-center gap-1.5">
               <Activity size={12} className="text-smoke" />
-              <span className={`text-xs font-bold px-1.5 py-0.5 ${readinessColor}`}>
+              <span className={`text-xs font-bold ${readinessColor}`}>
                 {m.readiness_score}
               </span>
             </div>
           )}
+
+          {/* RPE */}
           {m.avg_rpe && (
             <div className="flex items-center gap-1.5">
+              <Heart size={12} className="text-smoke" />
               <span className="text-smoke text-[10px] uppercase">RPE</span>
-              <span className={`text-xs font-bold ${m.avg_rpe <= 6 ? 'text-green-400' : 'text-orange-400'}`}>
+              <span className={`text-xs font-bold ${m.avg_rpe <= 6 ? 'text-green-400' : m.avg_rpe <= 8 ? 'text-yellow-400' : 'text-red-400'}`}>
                 {m.avg_rpe}
               </span>
             </div>
           )}
+
+          {/* Pain indicator */}
+          {m.pain_flag_7d && (
+            <span className="text-red-400 text-xs font-bold uppercase px-2 py-1 border border-red-500/30 bg-red-500/10">
+              PAIN
+            </span>
+          )}
+
+          {/* RPE sparkline */}
           {m.rpe_sparkline?.length > 1 && (
-            <Sparkline data={m.rpe_sparkline} width={60} height={18} color="#FF6B6B" />
+            <Sparkline data={m.rpe_sparkline} width={50} height={16} color="#FF6B6B" />
           )}
         </div>
       )}
