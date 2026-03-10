@@ -52,7 +52,7 @@ export default function AthletesPage() {
       <div className="hidden md:block border border-ash">
         <div className="grid grid-cols-7 gap-4 px-6 py-3 bg-steel text-smoke text-xs uppercase tracking-wider font-semibold">
           <div className="col-span-2">Athlete</div>
-          <div>VO2max</div>
+          <div>VDOT</div>
           <div>Goal Race</div>
           <div>Weekly KM</div>
           <div>Plan Status</div>

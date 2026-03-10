@@ -84,7 +84,7 @@ export async function buildAthleteContext(supabase, athleteId) {
   parts.push(`\n## ATHLETE PROFILE`);
   parts.push(`- Name: ${athlete.profiles?.full_name}`);
   parts.push(`- Age: ${athlete.age}, Weight: ${athlete.weight_kg}kg, Height: ${athlete.height_cm}cm`);
-  parts.push(`- VO2max: ${athlete.vdot}, Weekly KM: ${athlete.weekly_km}`);
+  parts.push(`- VDOT: ${athlete.vdot}, Weekly KM: ${athlete.weekly_km}`);
   parts.push(`- Goal: ${athlete.goal_race} in ${athlete.goal_time_seconds ? formatGoalTime(athlete.goal_time_seconds) : 'No target'}`);
   parts.push(`- Race date: ${athlete.goal_race_date || 'Not set'}`);
   if (athlete.injuries) parts.push(`- Injuries/Limitations: ${athlete.injuries}`);
@@ -95,7 +95,7 @@ export async function buildAthleteContext(supabase, athleteId) {
   parts.push(`- Tempo: ${formatPace(athlete.pace_tempo)}`);
   parts.push(`- Threshold: ${formatPace(athlete.pace_lt)}`);
   parts.push(`- Race: ${formatPace(athlete.pace_race)}`);
-  parts.push(`- VO2max: ${formatPace(athlete.pace_vo2max)}`);
+  parts.push(`- Interval: ${formatPace(athlete.pace_vo2max)}`);
 
   // ACWR
   parts.push(`\n## WORKLOAD STATUS`);
@@ -203,7 +203,7 @@ export async function buildPlanReviewContext(supabase, athleteId, planId) {
   parts.push(`\n## ATHLETE PROFILE`);
   parts.push(`- Name: ${athlete.profiles?.full_name}`);
   parts.push(`- Age: ${athlete.age}, Weight: ${athlete.weight_kg}kg, Height: ${athlete.height_cm}cm`);
-  parts.push(`- VO2max: ${athlete.vdot}, Weekly KM: ${athlete.weekly_km}`);
+  parts.push(`- VDOT: ${athlete.vdot}, Weekly KM: ${athlete.weekly_km}`);
   parts.push(`- Goal: ${athlete.goal_race} in ${athlete.goal_time_seconds ? formatGoalTime(athlete.goal_time_seconds) : 'No target'}`);
   parts.push(`- Race date: ${athlete.goal_race_date || 'Not set'}`);
   if (athlete.injuries) parts.push(`- Injuries/Limitations: ${athlete.injuries}`);
@@ -214,7 +214,7 @@ export async function buildPlanReviewContext(supabase, athleteId, planId) {
   parts.push(`- Tempo: ${formatPace(athlete.pace_tempo)}`);
   parts.push(`- Threshold: ${formatPace(athlete.pace_lt)}`);
   parts.push(`- Race: ${formatPace(athlete.pace_race)}`);
-  parts.push(`- VO2max: ${formatPace(athlete.pace_vo2max)}`);
+  parts.push(`- Interval: ${formatPace(athlete.pace_vo2max)}`);
 
   // Full plan
   parts.push(`\n## TRAINING PLAN: ${plan.name}`);

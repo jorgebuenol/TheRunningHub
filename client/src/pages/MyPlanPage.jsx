@@ -416,7 +416,7 @@ export default function MyPlanPage() {
             <p className="text-red-400 font-semibold">{formatPace(athlete.pace_race)}</p>
           </div>
           <div>
-            <p className="text-smoke text-xs uppercase">VO2max</p>
+            <p className="text-smoke text-xs uppercase">Interval</p>
             <p className="text-volt font-semibold">{formatPace(athlete.pace_vo2max)}</p>
           </div>
         </div>

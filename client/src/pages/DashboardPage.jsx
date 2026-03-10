@@ -215,7 +215,7 @@ function AthleteCard({ athlete }) {
           <p className="text-volt font-bold text-sm">{weeksLabel}</p>
         </div>
         <div>
-          <p className="text-smoke text-xs uppercase">VO2max</p>
+          <p className="text-smoke text-xs uppercase">VDOT</p>
           <p className="text-white font-semibold text-sm">{athlete.vdot || '--'}</p>
         </div>
       </div>

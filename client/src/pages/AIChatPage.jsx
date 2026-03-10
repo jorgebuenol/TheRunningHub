@@ -95,7 +95,7 @@ export default function AIChatPage() {
           >
             {athletes.map(a => (
               <option key={a.id} value={a.id}>
-                {a.profiles?.full_name} — {a.goal_race || 'No race'} {a.vdot ? `(VO2max ${a.vdot})` : ''}
+                {a.profiles?.full_name} — {a.goal_race || 'No race'} {a.vdot ? `(VDOT ${a.vdot})` : ''}
               </option>
             ))}
           </select>

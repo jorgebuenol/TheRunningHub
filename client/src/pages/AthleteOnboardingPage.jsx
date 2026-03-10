@@ -163,7 +163,7 @@ export default function AthleteOnboardingPage() {
 
         {step === 2 && (
           <div className="space-y-4">
-            <h2 className="font-display text-xl mb-4">RACE TIMES & VO2max</h2>
+            <h2 className="font-display text-xl mb-4">RACE TIMES & VDOT</h2>
             <p className="text-smoke text-sm mb-4">Enter recent race times (MM:SS or H:MM:SS). At least one is required.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="5K Time" value={form.time_5k} onChange={v => update('time_5k', v)} placeholder="22:30" />
@@ -176,15 +176,15 @@ export default function AthleteOnboardingPage() {
               <div className="mt-6 p-4 bg-carbon border border-volt">
                 <div className="flex items-center gap-2 mb-4">
                   <Zap size={20} className="text-volt" />
-                  <h3 className="font-display text-xl text-volt">VO2max: {previewVdot}</h3>
+                  <h3 className="font-display text-xl text-volt">VDOT: {previewVdot}</h3>
+                  <span className="text-smoke text-xs" title="VDOT is a performance index based on Jack Daniels' Running Formula, not a true VO2max measurement.">(performance index)</span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
-                  <PaceDisplay label="Easy" value={`${formatPace(previewPaces.easy_min)} - ${formatPace(previewPaces.easy_max)}`} />
-                  <PaceDisplay label="Tempo" value={formatPace(previewPaces.tempo)} />
-                  <PaceDisplay label="Threshold" value={formatPace(previewPaces.lt)} />
-                  <PaceDisplay label="Race 10K" value={formatPace(previewPaces.race_10k)} />
-                  <PaceDisplay label="VO2max" value={formatPace(previewPaces.vo2max)} />
-                  <PaceDisplay label="Race 5K" value={formatPace(previewPaces.race_5k)} />
+                  <PaceDisplay label="Easy" value={`${formatPace(previewPaces.pace_easy_min)} - ${formatPace(previewPaces.pace_easy_max)}`} />
+                  <PaceDisplay label="Tempo" value={formatPace(previewPaces.pace_tempo)} />
+                  <PaceDisplay label="Threshold" value={formatPace(previewPaces.pace_lt)} />
+                  <PaceDisplay label="Race" value={formatPace(previewPaces.pace_race)} />
+                  <PaceDisplay label="Interval" value={formatPace(previewPaces.pace_vo2max)} />
                 </div>
               </div>
             )}

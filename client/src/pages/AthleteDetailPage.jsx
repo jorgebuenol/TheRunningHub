@@ -232,7 +232,7 @@ export default function AthleteDetailPage() {
 
       {/* Quick Stats Bar */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
-        <StatBox label="VO2max" value={athlete.vdot || '--'} accent />
+        <StatBox label="VDOT" value={athlete.vdot || '--'} accent />
         <StatBox label="Weekly KM" value={athlete.weekly_km || '--'} />
         <StatBox label="Goal" value={athlete.goal_race || '--'} />
         <StatBox label="Target" value={athlete.goal_time_seconds ? formatTime(athlete.goal_time_seconds) : '--'} />
@@ -412,7 +412,7 @@ export default function AthleteDetailPage() {
           <PaceRow label="Tempo" value={formatPace(athlete.pace_tempo)} color="text-yellow-400" />
           <PaceRow label="Threshold" value={formatPace(athlete.pace_lt)} color="text-orange-400" />
           <PaceRow label="Race Pace" value={formatPace(athlete.pace_race)} color="text-red-400" />
-          <PaceRow label="VO2max" value={formatPace(athlete.pace_vo2max)} color="text-volt" />
+          <PaceRow label="Interval" value={formatPace(athlete.pace_vo2max)} color="text-volt" />
         </div>
       </div>
 

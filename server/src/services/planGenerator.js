@@ -52,7 +52,7 @@ ATHLETE PROFILE:
 - Weight: ${athlete.weight_kg}kg, Height: ${athlete.height_cm}cm
 - Body fat: ${athlete.body_fat_pct}%
 - Current weekly mileage: ${athlete.weekly_km}km
-- VO2max: ${athlete.vdot}
+- VDOT: ${athlete.vdot}
 - Available days: ${athlete.available_days?.join(', ')}
 - Training window: ${athlete.available_time_start} - ${athlete.available_time_end}
 - Injuries/limitations: ${athlete.injuries || 'None'}
@@ -63,7 +63,7 @@ TRAINING PACES (per km):
 - Tempo: ${paces.tempo}
 - Lactate Threshold: ${paces.lt}
 - Race Pace: ${paces.race}
-- VO2max intervals: ${paces.vo2max}
+- Interval: ${paces.vo2max}
 
 GOAL:
 - Race: ${athlete.goal_race}
