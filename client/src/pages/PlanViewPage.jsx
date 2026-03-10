@@ -1,12 +1,12 @@
 import { useEffect, useState, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { formatPace, formatTime } from '../lib/vdot';
 import {
   ArrowLeft, Calendar, Edit3, Save, X, Check,
   Bot, Send, Loader, MessageSquare, ChevronDown, ChevronRight,
-  Shield, History, Undo2, Zap,
+  Shield, History, Undo2, Zap, Trash2,
 } from 'lucide-react';
 
 const WORKOUT_COLORS = {
@@ -55,6 +55,7 @@ const HR_ZONES = ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'];
 
 export default function PlanViewPage() {
   const { planId } = useParams();
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const isCoach = profile?.role === 'coach';
 
@@ -86,6 +87,10 @@ export default function PlanViewPage() {
   // Version history
   const [showVersions, setShowVersions] = useState(false);
   const [versions, setVersions] = useState([]);
+
+  // Delete confirmation
+  const [confirmDelete, setConfirmDelete] = useState(null); // { type: 'plan'|'week', id?, label }
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     loadPlan();
@@ -189,6 +194,35 @@ export default function PlanViewPage() {
       setActionMessage(`Error: ${err.message}`);
     } finally {
       setUnpublishing(false);
+    }
+  }
+
+  // Delete plan
+  async function handleDeletePlan() {
+    setDeleting(true);
+    try {
+      await api.deletePlan(planId);
+      navigate(`/athletes/${plan.athlete_id}`);
+    } catch (err) {
+      setActionMessage(`Error: ${err.message}`);
+      setConfirmDelete(null);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  // Delete week
+  async function handleDeleteWeek(weekId) {
+    setDeleting(true);
+    try {
+      const updated = await api.deleteWeek(planId, weekId);
+      setPlan(updated);
+      setConfirmDelete(null);
+    } catch (err) {
+      setActionMessage(`Error: ${err.message}`);
+      setConfirmDelete(null);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -316,6 +350,13 @@ export default function PlanViewPage() {
                   <Check size={16} />
                   {approving ? 'APPROVING...' : 'APPROVE & PUBLISH'}
                 </button>
+                <button
+                  onClick={() => setConfirmDelete({ type: 'plan', label: plan.name || 'this plan' })}
+                  className="btn-ghost flex items-center gap-2 text-red-400 hover:text-red-300"
+                >
+                  <Trash2 size={16} />
+                  DELETE PLAN
+                </button>
               </>
             )}
             {isApproved && (
@@ -440,21 +481,32 @@ export default function PlanViewPage() {
             <div key={week.id} id={`week-${week.week_number}`} className="card">
               {/* Week header — shared between generated and skeleton */}
               <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="font-display text-xl">
-                    WEEK {week.week_number}
-                    {week.phase && (
-                      <span className="text-volt ml-3 text-sm">{PHASE_LABELS[week.phase] || week.phase}</span>
-                    )}
-                  </h2>
-                  <div className="flex flex-wrap items-center gap-2 mt-1">
-                    {week.start_date && (
-                      <span className="text-smoke text-xs">
-                        {formatWeekRange(week.start_date)}
-                      </span>
-                    )}
-                    {week.notes && <span className="text-smoke text-xs">— {week.notes}</span>}
+                <div className="flex items-center gap-3">
+                  <div>
+                    <h2 className="font-display text-xl">
+                      WEEK {week.week_number}
+                      {week.phase && (
+                        <span className="text-volt ml-3 text-sm">{PHASE_LABELS[week.phase] || week.phase}</span>
+                      )}
+                    </h2>
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      {week.start_date && (
+                        <span className="text-smoke text-xs">
+                          {formatWeekRange(week.start_date)}
+                        </span>
+                      )}
+                      {week.notes && <span className="text-smoke text-xs">— {week.notes}</span>}
+                    </div>
                   </div>
+                  {canEdit && weeks.length > 1 && (
+                    <button
+                      onClick={() => setConfirmDelete({ type: 'week', id: week.id, label: `Week ${week.week_number}` })}
+                      className="text-smoke/50 hover:text-red-400 transition-colors p-1"
+                      title="Delete this week"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                 </div>
                 <div className="text-right">
                   {week.is_generated ? (
@@ -586,6 +638,42 @@ export default function PlanViewPage() {
           ))}
         </div>
       </div>
+
+      {/* Delete confirmation dialog */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+          <div className="bg-carbon border border-red-500/50 border-l-4 border-l-red-500 p-6 max-w-md w-full mx-4">
+            <h3 className="font-display text-lg text-white mb-2">
+              DELETE {confirmDelete.type === 'plan' ? 'PLAN' : 'WEEK'}
+            </h3>
+            <p className="text-smoke text-sm mb-1">
+              Delete <span className="text-white font-semibold">{confirmDelete.label}</span>? This cannot be undone.
+            </p>
+            <p className="text-red-400/70 text-xs mb-6">
+              {confirmDelete.type === 'plan'
+                ? 'All weeks and workouts will be permanently deleted.'
+                : 'All workouts in this week will be deleted and remaining weeks will be renumbered.'}
+            </p>
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                disabled={deleting}
+                className="btn-ghost px-4 py-2 text-sm"
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={() => confirmDelete.type === 'plan' ? handleDeletePlan() : handleDeleteWeek(confirmDelete.id)}
+                disabled={deleting}
+                className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 text-sm font-bold uppercase tracking-wider flex items-center gap-2 transition-colors"
+              >
+                <Trash2 size={14} />
+                {deleting ? 'DELETING...' : 'DELETE'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI Chat Sidebar */}
       {chatOpen && isCoach && isDraft && (

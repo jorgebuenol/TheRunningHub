@@ -428,6 +428,97 @@ planRoutes.get('/:planId/versions', coachOnly, async (req, res, next) => {
   }
 });
 
+// DELETE a draft plan (cascades to weeks → workouts → feedback)
+planRoutes.delete('/:planId', coachOnly, async (req, res, next) => {
+  try {
+    const { planId } = req.params;
+
+    const { data: plan, error: fetchErr } = await req.supabase
+      .from('training_plans')
+      .select('id, status')
+      .eq('id', planId)
+      .single();
+
+    if (fetchErr || !plan) return res.status(404).json({ message: 'Plan not found' });
+    if (plan.status !== 'draft') {
+      return res.status(409).json({ message: 'Only draft plans can be deleted. Unpublish the plan first.' });
+    }
+
+    const { error: deleteErr } = await req.supabase
+      .from('training_plans')
+      .delete()
+      .eq('id', planId);
+
+    if (deleteErr) throw deleteErr;
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE a single week from a draft plan (cascades to workouts)
+planRoutes.delete('/:planId/weeks/:weekId', coachOnly, async (req, res, next) => {
+  try {
+    const { planId, weekId } = req.params;
+
+    const fullPlan = await fetchFullPlan(req.supabase, planId);
+    if (!fullPlan) return res.status(404).json({ message: 'Plan not found' });
+    if (fullPlan.status !== 'draft') {
+      return res.status(409).json({ message: 'Can only delete weeks from draft plans' });
+    }
+
+    const weeks = fullPlan.plan_weeks || [];
+    const targetWeek = weeks.find(w => w.id === weekId);
+    if (!targetWeek) return res.status(404).json({ message: 'Week not found in this plan' });
+
+    if (weeks.length <= 1) {
+      return res.status(400).json({ message: 'Cannot delete the last week. Delete the entire plan instead.' });
+    }
+
+    // Delete the week (CASCADE removes workouts)
+    const { error: deleteErr } = await req.supabase
+      .from('plan_weeks')
+      .delete()
+      .eq('id', weekId);
+
+    if (deleteErr) throw deleteErr;
+
+    // Renumber remaining weeks and recalculate start_dates
+    const remaining = weeks
+      .filter(w => w.id !== weekId)
+      .sort((a, b) => a.week_number - b.week_number);
+
+    const planStart = remaining[0]?.start_date
+      ? new Date(remaining[0].start_date)
+      : getMonday(new Date());
+
+    for (let i = 0; i < remaining.length; i++) {
+      const newNum = i + 1;
+      const newStart = new Date(planStart);
+      newStart.setDate(newStart.getDate() + i * 7);
+
+      await req.supabase
+        .from('plan_weeks')
+        .update({
+          week_number: newNum,
+          start_date: newStart.toISOString().split('T')[0],
+        })
+        .eq('id', remaining[i].id);
+    }
+
+    // Update total_weeks on the plan
+    await req.supabase
+      .from('training_plans')
+      .update({ total_weeks: remaining.length })
+      .eq('id', planId);
+
+    const updatedPlan = await fetchFullPlan(req.supabase, planId);
+    res.json(updatedPlan);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET all plans for an athlete
 planRoutes.get('/athlete/:athleteId', async (req, res, next) => {
   try {
