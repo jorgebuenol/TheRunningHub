@@ -307,9 +307,9 @@ export default function PlanViewPage() {
   const ungeneratedCount = weeks.filter(w => !w.is_generated).length;
 
   return (
-    <div className="flex gap-0">
+    <div className="relative">
       {/* Main plan area */}
-      <div className={chatOpen ? 'flex-1 min-w-0 pr-4' : 'w-full'}>
+      <div className="w-full">
         {/* Back link */}
         {isCoach && (
           <Link to={`/athletes/${plan.athlete_id}`} className="flex items-center gap-2 text-smoke hover:text-volt text-sm uppercase tracking-wider mb-6 transition-colors">
@@ -534,7 +534,8 @@ export default function PlanViewPage() {
 
               {/* Generated week → full workout grid */}
               {week.is_generated ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
+                <div className="overflow-x-auto -mx-1 px-1 pb-1">
+                <div className="grid grid-cols-7 gap-2 min-w-[700px]">
                   {DAY_NAMES.map((day, i) => {
                     const workout = week.workouts?.find(w => w.day_of_week === i);
                     if (!workout) {
@@ -603,6 +604,7 @@ export default function PlanViewPage() {
                       </div>
                     );
                   })}
+                </div>
                 </div>
               ) : (
                 /* Skeleton week → generate prompt */
@@ -681,9 +683,11 @@ export default function PlanViewPage() {
         </div>
       )}
 
-      {/* AI Chat Sidebar */}
+      {/* AI Chat Sidebar — fixed overlay */}
       {chatOpen && isCoach && isDraft && (
-        <div className="w-[400px] flex-shrink-0 flex flex-col border-l border-ash h-[calc(100vh-4rem)] sticky top-0">
+        <>
+        <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setChatOpen(false)} />
+        <div className="fixed right-0 top-0 w-[400px] max-w-[90vw] flex flex-col border-l border-ash h-screen bg-carbon z-50 shadow-2xl shadow-black/50">
           {/* Chat header */}
           <div className="px-4 py-3 border-b border-ash flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -829,6 +833,7 @@ export default function PlanViewPage() {
             </button>
           </form>
         </div>
+        </>
       )}
     </div>
   );
