@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { coachOnly } from '../middleware/auth.js';
 import { getBestVDOT, getTrainingPaces } from '../utils/vdot.js';
-import { isOnboardingComplete } from '../../../shared/onboardingProgress.js';
+import { isOnboardingComplete } from '../utils/onboardingProgress.js';
 
 export const athleteRoutes = Router();
 

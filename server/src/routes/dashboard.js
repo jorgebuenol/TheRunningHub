@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { coachOnly } from '../middleware/auth.js';
 import { getDashboardFlags } from '../services/monitoring.js';
-import { getOverallProgress } from '../../../shared/onboardingProgress.js';
+import { getOverallProgress } from '../utils/onboardingProgress.js';
 
 export const dashboardRoutes = Router();
 

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { coachOnly } from '../middleware/auth.js';
 import { generateTrainingPlan } from '../services/planGenerator.js';
 import { addDays, startOfWeek } from '../utils/dates.js';
-import { isOnboardingComplete, getMissingSections } from '../../../shared/onboardingProgress.js';
+import { isOnboardingComplete, getMissingSections } from '../utils/onboardingProgress.js';
 
 export const planRoutes = Router();
 
