@@ -116,7 +116,7 @@ export default function Layout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 md:ml-64">
+      <main className="flex-1 md:ml-64 min-w-0 overflow-x-hidden">
         <div className="p-4 md:p-8 pt-[72px] md:pt-8">
           <Outlet />
         </div>
