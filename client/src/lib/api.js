@@ -36,7 +36,10 @@ export const api = {
   updateAthlete: (id, data) => request(`/api/athletes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   // Training Plans
-  generatePlan: (athleteId) => request(`/api/plans/generate/${athleteId}`, { method: 'POST' }),
+  generatePlan: (athleteId, overrides = {}) => request(`/api/plans/generate/${athleteId}`, {
+    method: 'POST',
+    body: JSON.stringify(overrides),
+  }),
   getPlan: (planId) => request(`/api/plans/${planId}`),
   generateWeekDetail: (planId, weekId) => request(`/api/plans/${planId}/weeks/${weekId}/generate`, { method: 'POST' }),
   deletePlan: (planId) => request(`/api/plans/${planId}`, { method: 'DELETE' }),

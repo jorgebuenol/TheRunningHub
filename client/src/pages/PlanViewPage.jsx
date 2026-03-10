@@ -27,6 +27,9 @@ const PHASE_LABELS = {
   peak: 'PEAK TRAINING',
   taper: 'TAPER',
   race: 'RACE WEEK',
+  base_recovery: 'BASE RECOVERY',
+  build_recovery: 'BUILD RECOVERY',
+  peak_recovery: 'PEAK RECOVERY',
 };
 
 const PHASE_COLORS = {
@@ -35,6 +38,9 @@ const PHASE_COLORS = {
   peak: 'border-red-500 bg-red-500',
   taper: 'border-blue-500 bg-blue-500',
   race: 'border-volt bg-volt',
+  base_recovery: 'border-emerald-300 bg-emerald-300',
+  build_recovery: 'border-amber-300 bg-amber-300',
+  peak_recovery: 'border-rose-300 bg-rose-300',
 };
 
 const INTENSITY_STYLES = {

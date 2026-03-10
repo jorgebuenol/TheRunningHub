@@ -7,7 +7,16 @@ import {
   Zap, Calendar, Target, TrendingUp, RefreshCw, Send, ArrowLeft,
   Activity, Shield, AlertTriangle, CheckCircle, Circle, CircleDot,
   User, Heart, Moon, Apple, Briefcase, Dumbbell, Smartphone, MessageSquare, BarChart3,
+  X,
 } from 'lucide-react';
+
+// ─── Athlete level derivation (mirrors server logic) ───────────────────────
+function deriveAthleteLevel(weeklyKm) {
+  const km = parseFloat(weeklyKm) || 0;
+  if (km < 20) return { level: 'beginner', label: 'Beginner (<20km/week)', color: 'text-green-400 border-green-400' };
+  if (km <= 50) return { level: 'recreational', label: 'Recreational (20–50km/week)', color: 'text-yellow-400 border-yellow-400' };
+  return { level: 'intermediate', label: 'Intermediate (50+km/week)', color: 'text-red-400 border-red-400' };
+}
 
 // ─── Lookup constants (for human-readable labels) ───────────────────────────
 
@@ -92,6 +101,20 @@ export default function AthleteDetailPage() {
   const [message, setMessage] = useState('');
   const [monitoring, setMonitoring] = useState(null);
 
+  // Pre-generation modal state
+  const [showGenModal, setShowGenModal] = useState(false);
+  const [genOverrides, setGenOverrides] = useState({
+    levelOverride: '',
+    vdotOverride: '',
+    magicMileMin: '',
+    magicMileSec: '',
+    isRunWalk: false,
+    // Beginner fitness assessment
+    canRun10Min: '',
+    longestRunMinutes: '',
+    runningFrequency: '',
+  });
+
   useEffect(() => {
     loadAthlete();
   }, [id]);
@@ -111,11 +134,39 @@ export default function AthleteDetailPage() {
     }
   }
 
-  async function handleGeneratePlan() {
+  function handleGeneratePlan() {
+    // Open pre-generation modal instead of generating directly
+    setGenOverrides({
+      levelOverride: '',
+      vdotOverride: '',
+      magicMileMin: '',
+      magicMileSec: '',
+      isRunWalk: false,
+      canRun10Min: '',
+      longestRunMinutes: '',
+      runningFrequency: '',
+    });
+    setShowGenModal(true);
+  }
+
+  async function handleConfirmGenerate() {
     setGenerating(true);
     setMessage('');
+    setShowGenModal(false);
     try {
-      const plan = await api.generatePlan(id);
+      const overrides = {};
+      if (genOverrides.levelOverride) overrides.levelOverride = genOverrides.levelOverride;
+      if (genOverrides.vdotOverride) overrides.vdotOverride = parseInt(genOverrides.vdotOverride);
+      if (genOverrides.isRunWalk) overrides.isRunWalk = true;
+
+      // Calculate Magic Mile seconds if provided
+      const mm = parseInt(genOverrides.magicMileMin) || 0;
+      const ms = parseInt(genOverrides.magicMileSec) || 0;
+      if (mm > 0 || ms > 0) {
+        overrides.magicMileSeconds = mm * 60 + ms;
+      }
+
+      const plan = await api.generatePlan(id, overrides);
       navigate(`/plans/${plan.id}`);
     } catch (err) {
       if (err.missing_sections) {
@@ -513,6 +564,240 @@ export default function AthleteDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ─── Pre-Generation Modal ─── */}
+      {showGenModal && athlete && (
+        <PreGenerationModal
+          athlete={athlete}
+          genOverrides={genOverrides}
+          setGenOverrides={setGenOverrides}
+          onConfirm={handleConfirmGenerate}
+          onClose={() => setShowGenModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Pre-Generation Modal ────────────────────────────────────────────────────
+
+function PreGenerationModal({ athlete, genOverrides, setGenOverrides, onConfirm, onClose }) {
+  const derived = deriveAthleteLevel(athlete.weekly_km);
+  const effectiveLevel = genOverrides.levelOverride || derived.level;
+  const isBeginner = effectiveLevel === 'beginner';
+  const hasRaceTime = athlete.time_5k || athlete.time_10k || athlete.time_half_marathon || athlete.time_marathon;
+
+  const weeksToRace = athlete.goal_race_date
+    ? Math.ceil((new Date(athlete.goal_race_date) - new Date()) / (7 * 24 * 60 * 60 * 1000))
+    : null;
+
+  const weeksWarning = weeksToRace && (weeksToRace < 16 || weeksToRace > 24);
+
+  // Auto-detect run/walk trigger from assessment
+  const shouldRunWalk = isBeginner && (
+    genOverrides.canRun10Min === 'no' ||
+    genOverrides.runningFrequency === '0' ||
+    (genOverrides.longestRunMinutes && parseInt(genOverrides.longestRunMinutes) < 20)
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+      <div className="bg-carbon border border-volt/30 border-l-4 border-l-volt p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display text-xl text-volt">GENERATE PLAN</h3>
+          <button onClick={onClose} className="text-smoke hover:text-white">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Derived Level Display */}
+        <div className="mb-4">
+          <p className="text-smoke text-xs uppercase mb-1">Derived Athlete Level</p>
+          <div className="flex items-center gap-3">
+            <span className={`px-3 py-1 text-sm font-bold uppercase tracking-wider border ${derived.color}`}>
+              {derived.label}
+            </span>
+            <span className="text-smoke text-xs">({athlete.weekly_km || 0} km/week)</span>
+          </div>
+        </div>
+
+        {/* Plan Duration */}
+        <div className="mb-4">
+          <p className="text-smoke text-xs uppercase mb-1">Plan Duration</p>
+          <p className="text-white font-semibold">
+            {weeksToRace ?? '--'} weeks to race
+            {weeksWarning && (
+              <span className="text-yellow-400 text-xs ml-2">
+                ⚠ {weeksToRace < 16 ? 'Less than 16 weeks — plan may be compressed' : 'More than 24 weeks — plan will be capped'}
+              </span>
+            )}
+          </p>
+        </div>
+
+        {/* VDOT */}
+        <div className="mb-4">
+          <p className="text-smoke text-xs uppercase mb-1">Current VDOT</p>
+          <p className="text-white font-semibold">{athlete.vdot || 'Not set'}</p>
+        </div>
+
+        <div className="border-t border-ash my-4" />
+
+        {/* Beginner Assessment (PART 3) — shown when beginner without race time */}
+        {isBeginner && !hasRaceTime && (
+          <div className="mb-4 p-4 border border-yellow-500/30 bg-yellow-500/5">
+            <h4 className="font-display text-sm text-yellow-400 mb-3">BEGINNER FITNESS ASSESSMENT</h4>
+            <p className="text-smoke text-xs mb-3">
+              No race times found. Use the Magic Mile or answer questions below to estimate training paces.
+            </p>
+
+            {/* Magic Mile Input */}
+            <div className="mb-3">
+              <p className="text-smoke text-xs uppercase mb-1">Magic Mile (1-mile time trial)</p>
+              <p className="text-smoke text-[10px] mb-2">Run 1 mile at honest race effort after 10min warmup</p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  max="20"
+                  placeholder="min"
+                  value={genOverrides.magicMileMin}
+                  onChange={e => setGenOverrides(o => ({ ...o, magicMileMin: e.target.value }))}
+                  className="input-field w-20 text-center"
+                />
+                <span className="text-smoke">:</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="59"
+                  placeholder="sec"
+                  value={genOverrides.magicMileSec}
+                  onChange={e => setGenOverrides(o => ({ ...o, magicMileSec: e.target.value }))}
+                  className="input-field w-20 text-center"
+                />
+              </div>
+            </div>
+
+            {/* Run/Walk Assessment Questions */}
+            <div className="space-y-3">
+              <div>
+                <p className="text-smoke text-xs uppercase mb-1">Can you run 10 min continuously?</p>
+                <div className="flex gap-2">
+                  {['yes', 'no', 'sometimes'].map(v => (
+                    <button
+                      key={v}
+                      onClick={() => setGenOverrides(o => ({ ...o, canRun10Min: v }))}
+                      className={`px-3 py-1 text-xs uppercase font-bold border ${
+                        genOverrides.canRun10Min === v
+                          ? 'border-volt text-volt bg-volt/10'
+                          : 'border-ash text-smoke hover:border-volt/50'
+                      }`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-smoke text-xs uppercase mb-1">Longest continuous run (past month)</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="minutes"
+                    value={genOverrides.longestRunMinutes}
+                    onChange={e => setGenOverrides(o => ({ ...o, longestRunMinutes: e.target.value }))}
+                    className="input-field w-24"
+                  />
+                  <span className="text-smoke text-xs">minutes</span>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-smoke text-xs uppercase mb-1">Consistent running frequency</p>
+                <div className="flex gap-2">
+                  {[{ v: '0', l: '0' }, { v: '1-2', l: '1-2' }, { v: '3+', l: '3+' }].map(({ v, l }) => (
+                    <button
+                      key={v}
+                      onClick={() => setGenOverrides(o => ({ ...o, runningFrequency: v }))}
+                      className={`px-3 py-1 text-xs uppercase font-bold border ${
+                        genOverrides.runningFrequency === v
+                          ? 'border-volt text-volt bg-volt/10'
+                          : 'border-ash text-smoke hover:border-volt/50'
+                      }`}
+                    >
+                      {l}x/week
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {shouldRunWalk && (
+                <div className="p-3 border border-orange-500/30 bg-orange-500/5">
+                  <p className="text-orange-400 text-xs font-bold uppercase mb-1">Run/Walk Protocol Recommended</p>
+                  <p className="text-smoke text-xs">
+                    Based on assessment, this athlete should start with a run/walk protocol (1:1 ratio → progressive).
+                  </p>
+                  <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={genOverrides.isRunWalk || shouldRunWalk}
+                      onChange={e => setGenOverrides(o => ({ ...o, isRunWalk: e.target.checked }))}
+                      className="accent-volt"
+                    />
+                    <span className="text-white text-xs">Enable Run/Walk Protocol</span>
+                  </label>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="border-t border-ash my-4" />
+
+        {/* Coach Overrides */}
+        <div className="mb-4">
+          <h4 className="font-display text-sm text-smoke mb-3">COACH OVERRIDES (optional)</h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-smoke text-xs uppercase mb-1">Override Level</p>
+              <select
+                value={genOverrides.levelOverride}
+                onChange={e => setGenOverrides(o => ({ ...o, levelOverride: e.target.value }))}
+                className="input-field w-full"
+              >
+                <option value="">Use derived ({derived.level})</option>
+                <option value="beginner">Beginner</option>
+                <option value="recreational">Recreational</option>
+                <option value="intermediate">Intermediate</option>
+              </select>
+            </div>
+            <div>
+              <p className="text-smoke text-xs uppercase mb-1">Override VDOT</p>
+              <input
+                type="number"
+                min="20"
+                max="70"
+                placeholder={athlete.vdot || 'auto'}
+                value={genOverrides.vdotOverride}
+                onChange={e => setGenOverrides(o => ({ ...o, vdotOverride: e.target.value }))}
+                className="input-field w-full"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-3 mt-6">
+          <button onClick={onClose} className="btn-ghost px-4 py-2 text-sm">
+            CANCEL
+          </button>
+          <button onClick={onConfirm} className="btn-primary flex items-center gap-2 px-6 py-2">
+            <Zap size={16} />
+            GENERATE PLAN
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

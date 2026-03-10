@@ -9,27 +9,85 @@ function getAnthropic() {
   return _anthropic;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   UTILITY HELPERS
+   ═══════════════════════════════════════════════════════════════ */
+
 /**
- * Generate a structured training plan using Claude
+ * Derive athlete level from weekly km
+ * beginner: <20km/week, recreational: 20-50, intermediate: 50+
  */
+export function deriveAthleteLevel(weeklyKm) {
+  const km = parseFloat(weeklyKm) || 0;
+  if (km < 20) return { level: 'beginner', label: 'Beginner (<20km/week)' };
+  if (km <= 50) return { level: 'recreational', label: 'Recreational (20-50km/week)' };
+  return { level: 'intermediate', label: 'Intermediate (50+km/week)' };
+}
+
+/**
+ * Format seconds per km as "M:SS min/km" string for AI prompts
+ */
+function formatPaceMinKm(secPerKm) {
+  if (!secPerKm) return '--:--';
+  const s = Math.round(secPerKm);
+  const min = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${min}:${String(sec).padStart(2, '0')}`;
+}
+
+/**
+ * Format goal time seconds to "H:MM:SS" or "MM:SS"
+ */
+function formatGoalTime(seconds) {
+  if (!seconds) return '--:--';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/**
+ * Derive intensity enum from phase for DB storage
+ */
+export function intensityFromPhase(phase) {
+  if (!phase) return 'easy';
+  if (phase.includes('recovery')) return 'recovery';
+  if (phase === 'base') return 'easy';
+  if (phase === 'build') return 'moderate';
+  if (phase === 'peak') return 'hard';
+  if (phase === 'taper') return 'recovery';
+  if (phase === 'race') return 'hard';
+  return 'easy';
+}
+
+/**
+ * Get all 7 day names, mark which are unavailable
+ */
+function getUnavailableDays(availableDays) {
+  const allDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  return allDays.filter(d => !(availableDays || []).includes(d));
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   LEGACY SINGLE-CALL PLAN GENERATOR (kept for backward compat)
+   ═══════════════════════════════════════════════════════════════ */
+
 export async function generateTrainingPlan(athlete, profile) {
   const weeksToRace = Math.ceil(
     (new Date(athlete.goal_race_date) - new Date()) / (7 * 24 * 60 * 60 * 1000)
   );
-
-  const prompt = buildPrompt(athlete, profile, weeksToRace);
-
+  const prompt = buildLegacyPrompt(athlete, profile, weeksToRace);
   const response = await getAnthropic().messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 16000,
     messages: [{ role: 'user', content: prompt }],
   });
-
-  const content = response.content[0].text;
-  return parsePlanResponse(content, weeksToRace);
+  return parseLegacyPlanResponse(response.content[0].text, weeksToRace);
 }
 
-function buildPrompt(athlete, profile, weeksToRace) {
+function buildLegacyPrompt(athlete, profile, weeksToRace) {
   const paces = {
     easy: `${formatPace(athlete.pace_easy_min)} - ${formatPace(athlete.pace_easy_max)}`,
     tempo: formatPace(athlete.pace_tempo),
@@ -37,240 +95,97 @@ function buildPrompt(athlete, profile, weeksToRace) {
     race: formatPace(athlete.pace_race),
     vo2max: formatPace(athlete.pace_vo2max),
   };
-
-  const goalTimeMin = Math.floor(athlete.goal_time_seconds / 60);
-  const goalTimeSec = athlete.goal_time_seconds % 60;
-  const goalTimeStr = goalTimeSec > 0
-    ? `${goalTimeMin}:${String(goalTimeSec).padStart(2, '0')}`
-    : `${goalTimeMin}:00`;
-
-  return `You are an elite running coach creating a personalized training plan for a runner in Bogotá, Colombia (altitude ~2,640m).
-
-ATHLETE PROFILE:
-- Name: ${profile.full_name}
-- Age: ${athlete.age}
-- Weight: ${athlete.weight_kg}kg, Height: ${athlete.height_cm}cm
-- Body fat: ${athlete.body_fat_pct}%
-- Current weekly mileage: ${athlete.weekly_km}km
-- VDOT: ${athlete.vdot}
-- Available days: ${athlete.available_days?.join(', ')}
-- Training window: ${athlete.available_time_start} - ${athlete.available_time_end}
-- Injuries/limitations: ${athlete.injuries || 'None'}
-- GPS watch: ${athlete.gps_watch_model || 'Unknown'}
-
-TRAINING PACES (per km):
-- Easy: ${paces.easy}
-- Tempo: ${paces.tempo}
-- Lactate Threshold: ${paces.lt}
-- Race Pace: ${paces.race}
-- Interval: ${paces.vo2max}
-
-GOAL:
-- Race: ${athlete.goal_race}
-- Target time: ${goalTimeStr}
-- Race date: ${athlete.goal_race_date}
-- Weeks to race: ${weeksToRace}
-
-Generate a ${weeksToRace}-week training plan. Consider altitude training effects in Bogotá.
-
-RESPOND IN STRICT JSON FORMAT:
-{
-  "weeks": [
-    {
-      "week_number": 1,
-      "phase": "base|build|peak|taper|race",
-      "total_km": 40,
-      "notes": "Week focus description",
-      "workouts": [
-        {
-          "day_of_week": 0,
-          "workout_type": "easy|tempo|long_run|intervals|race_pace|recovery|rest|cross_training|race",
-          "title": "Easy Run",
-          "description": "One-line summary of the session",
-          "distance_km": 8,
-          "duration_minutes": 48,
-          "pace_target_sec_km": 360,
-          "pace_range_min": 350,
-          "pace_range_max": 370,
-          "hr_zone": "Z2",
-          "rpe_target": 4,
-          "intervals_detail": null,
-          "coach_notes": "Keep heart rate below 145bpm",
-          "session_structure": {
-            "warm_up": {
-              "distance_km": 1.5,
-              "duration_minutes": 10,
-              "pace_sec_km": 390,
-              "hr_zone": "Z1",
-              "description": "Easy jog building gradually"
-            },
-            "main_set": [
-              {
-                "type": "steady",
-                "distance_km": 5,
-                "pace_sec_km": 360,
-                "hr_zone": "Z2",
-                "rpe": 4,
-                "description": "Steady easy run"
-              }
-            ],
-            "cool_down": {
-              "distance_km": 1.5,
-              "duration_minutes": 10,
-              "pace_sec_km": 400,
-              "hr_zone": "Z1",
-              "description": "Easy jog + light stretching"
-            }
-          }
-        }
-      ]
-    }
-  ]
+  const goalTimeStr = formatGoalTime(athlete.goal_time_seconds);
+  return `You are an elite running coach. Generate a ${weeksToRace}-week training plan in JSON. Athlete: ${profile.full_name}, ${athlete.weekly_km}km/week, VDOT ${athlete.vdot}, goal: ${athlete.goal_race} in ${goalTimeStr}. Paces: Easy ${paces.easy}, Tempo ${paces.tempo}, LT ${paces.lt}, Race ${paces.race}, Interval ${paces.vo2max}. Available days: ${athlete.available_days?.join(', ')}. Output JSON only.`;
 }
 
-day_of_week: 0=Monday, 1=Tuesday, ..., 6=Sunday
-Only include workouts on the athlete's available days.
-Rest days should still be listed with workout_type "rest" (rest days have session_structure: null, rpe_target: null).
-For interval workouts, include intervals_detail AND use session_structure.main_set with type "intervals".
-rpe_target: expected RPE 1-10 for the overall session.
-
-IMPORTANT — session_structure rules:
-- Every non-rest workout MUST have session_structure with warm_up, main_set (array), and cool_down.
-- warm_up and cool_down are objects with: distance_km, duration_minutes, pace_sec_km, hr_zone, description.
-- main_set is an array of 1+ elements. Each element has: type ("steady"|"intervals"|"tempo"|"progression"), distance_km or distance_m (for intervals), pace_sec_km, hr_zone, rpe (1-10), description.
-- For intervals type: also include reps, distance_m, rest_seconds, rest_type ("jog"|"walk"|"stand").
-- For interval workouts also set intervals_detail: {"reps": 6, "distance_m": 800, "pace_sec_km": 240, "rest_seconds": 120, "rest_type": "jog"}
-- The sum of warm_up.distance_km + main_set distances + cool_down.distance_km should approximately equal the total distance_km.
-- description field remains a one-line summary for backward compatibility.
-ONLY output valid JSON. No markdown, no explanation.`;
-}
-
-function parsePlanResponse(text, weeksToRace) {
-  // Extract JSON from response (handle potential markdown wrapping)
+function parseLegacyPlanResponse(text, weeksToRace) {
   let jsonStr = text.trim();
-  if (jsonStr.startsWith('```')) {
-    jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
-  }
-
+  if (jsonStr.startsWith('```')) jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
   const plan = JSON.parse(jsonStr);
-
-  // Validate structure
-  if (!plan.weeks || !Array.isArray(plan.weeks)) {
-    throw new Error('Invalid plan structure: missing weeks array');
-  }
-
-  // Ensure week count matches
-  if (plan.weeks.length !== weeksToRace) {
-    console.warn(`Plan has ${plan.weeks.length} weeks, expected ${weeksToRace}`);
-  }
-
-  // Soft-validate session_structure presence on non-rest workouts
-  for (const week of plan.weeks) {
-    for (const w of week.workouts || []) {
-      if (w.workout_type !== 'rest' && !w.session_structure) {
-        console.warn(`Week ${week.week_number}: workout "${w.title}" missing session_structure, will use description fallback`);
-      }
-    }
-  }
-
+  if (!plan.weeks || !Array.isArray(plan.weeks)) throw new Error('Invalid plan structure');
+  if (plan.weeks.length !== weeksToRace) console.warn(`Plan has ${plan.weeks.length} weeks, expected ${weeksToRace}`);
   return plan;
 }
 
+
 /* ═══════════════════════════════════════════════════════════════
    TWO-LAYER PLAN ARCHITECTURE
-   Layer 1: Macro Plan (periodization skeleton)
-   Layer 2: Weekly Detail (per-week workout generation)
+   Methodology: Daniels / Pfitzinger / Hansons / 80-20 / Gabbett ACWR
    ═══════════════════════════════════════════════════════════════ */
 
 /**
- * Shared athlete context block for AI prompts
- */
-function buildAthleteContext(athlete, profile) {
-  const paces = {
-    easy: `${formatPace(athlete.pace_easy_min)} - ${formatPace(athlete.pace_easy_max)}`,
-    tempo: formatPace(athlete.pace_tempo),
-    lt: formatPace(athlete.pace_lt),
-    race: formatPace(athlete.pace_race),
-    vo2max: formatPace(athlete.pace_vo2max),
-  };
-
-  const goalTimeMin = Math.floor(athlete.goal_time_seconds / 60);
-  const goalTimeSec = athlete.goal_time_seconds % 60;
-  const goalTimeStr = goalTimeSec > 0
-    ? `${goalTimeMin}:${String(goalTimeSec).padStart(2, '0')}`
-    : `${goalTimeMin}:00`;
-
-  return {
-    paces,
-    goalTimeStr,
-    block: `ATHLETE PROFILE:
-- Name: ${profile.full_name}
-- Age: ${athlete.age}
-- Weight: ${athlete.weight_kg}kg, Height: ${athlete.height_cm}cm
-- Body fat: ${athlete.body_fat_pct}%
-- Current weekly mileage: ${athlete.weekly_km}km
-- VDOT: ${athlete.vdot}
-- Available days: ${athlete.available_days?.join(', ')}
-- Training window: ${athlete.available_time_start} - ${athlete.available_time_end}
-- Injuries/limitations: ${athlete.injuries || 'None'}
-- GPS watch: ${athlete.gps_watch_model || 'Unknown'}
-
-TRAINING PACES (per km):
-- Easy: ${paces.easy}
-- Tempo: ${paces.tempo}
-- Lactate Threshold: ${paces.lt}
-- Race Pace: ${paces.race}
-- Interval: ${paces.vo2max}
-
-GOAL:
-- Race: ${athlete.goal_race}
-- Target time: ${goalTimeStr}
-- Race date: ${athlete.goal_race_date}`,
-  };
-}
-
-/**
  * Layer 1: Generate macro periodization skeleton
- * Returns week-by-week phase map with km targets — no workouts
+ * Uses PART 1 of the plan generation methodology document
  */
-export async function generateMacroPlan(athlete, profile) {
-  const weeksToRace = Math.ceil(
+export async function generateMacroPlan(athlete, profile, overrides = {}) {
+  const weeksToRace = Math.max(4, Math.ceil(
     (new Date(athlete.goal_race_date) - new Date()) / (7 * 24 * 60 * 60 * 1000)
-  );
+  ));
 
-  const ctx = buildAthleteContext(athlete, profile);
+  const level = overrides.levelOverride || deriveAthleteLevel(athlete.weekly_km).level;
+  const vdot = overrides.vdotOverride || athlete.vdot;
+  const goalTimeStr = formatGoalTime(athlete.goal_time_seconds);
+  const trainingDays = athlete.available_days?.length || 4;
 
-  const prompt = `You are an elite running coach creating a periodization plan for a runner in Bogotá, Colombia (altitude ~2,640m).
+  const prompt = `You are an expert running coach generating a training plan skeleton for a half marathon athlete.
 
-${ctx.block}
-- Weeks to race: ${weeksToRace}
+ATHLETE:
+- Level: ${level} (beginner = <20km/week, recreational = 20-50km/week, intermediate = 50+km/week)
+- Current weekly km: ${athlete.weekly_km}
+- Goal: ${athlete.goal_race} (${athlete.goal_time_seconds ? `time target: ${goalTimeStr}` : 'finish'})
+- Available training days/week: ${trainingDays}
+- Race date: ${athlete.goal_race_date}
+- Total plan weeks: ${weeksToRace} (between 16-24)
+- Location: Bogota, Colombia (2,600m altitude -- all paces are altitude-adjusted, ~+15 sec/km on threshold/interval zones)
+${overrides.isRunWalk ? '- NOTE: This athlete uses a run/walk protocol. Start with 1:1 run/walk ratio in base phase, progress to continuous running.' : ''}
 
-Create a ${weeksToRace}-week PERIODIZATION SKELETON. Do NOT generate individual workouts — only the weekly framework.
+PHASE STRUCTURE RULES:
+Apply these exact phase lengths based on plan duration and athlete level:
 
-RESPOND IN STRICT JSON FORMAT:
+For BEGINNER (level: beginner):
+- 16 weeks: Base 6wk / Build 6wk / Peak 3wk / Taper 1wk
+- 20 weeks: Base 8wk / Build 7wk / Peak 4wk / Taper 1wk
+- 24 weeks: Base 10wk / Build 8wk / Peak 5wk / Taper 1wk
+
+For RECREATIONAL (level: recreational):
+- 16 weeks: Base 4wk / Build 6wk / Peak 4wk / Taper 2wk
+- 20 weeks: Base 5wk / Build 7wk / Peak 6wk / Taper 2wk
+- 24 weeks: Base 6wk / Build 8wk / Peak 8wk / Taper 2wk
+
+For INTERMEDIATE (level: intermediate):
+- 16 weeks: Base 3wk / Build 6wk / Peak 5wk / Taper 2wk
+- 20 weeks: Base 4wk / Build 7wk / Peak 7wk / Taper 2wk
+- 24 weeks: Base 5wk / Build 8wk / Peak 9wk / Taper 2wk
+
+If the total weeks don't match exactly 16/20/24, interpolate proportionally keeping the same phase ratios.
+
+RECOVERY WEEKS:
+- Beginners and injury-prone: insert a recovery week every 3rd week (vol -30%)
+- Recreational and intermediate: every 4th week (vol -25%)
+- Mark recovery weeks in the phase field as "base_recovery", "build_recovery", or "peak_recovery"
+
+WEEKLY KM PROGRESSION:
+- Start at athlete's current weekly km (or slightly below if entering base phase)
+- Increase max 15% per 3-week block for beginners, max 20% for recreational, max 25% for intermediate
+- Recovery weeks: reduce volume 25-30% from the previous non-recovery week
+- Taper: week 2-before-race = 60% of peak volume, race week = 40% of peak volume
+
+RESPOND ONLY WITH THIS JSON (no explanation, no markdown):
 {
   "weeks": [
     {
       "week_number": 1,
-      "phase": "base|build|peak|taper|race",
-      "km_target": 40,
-      "intensity": "easy|moderate|hard|recovery",
-      "notes": "Focus description for the week"
+      "phase": "base",
+      "km_target": 30,
+      "intensity_focus": "Easy aerobic base. No quality work. Strides only.",
+      "is_recovery": false
     }
   ]
 }
 
-Rules:
-- phase must be one of: base, build, peak, taper, race
-- intensity must be one of: easy, moderate, hard, recovery
-- km_target is total planned weekly volume in km
-- notes: max 10 words describing the training focus
-- Consider altitude effects (Bogotá 2,640m), current weekly mileage (${athlete.weekly_km}km), and the 10% rule for volume progression
-- Build volume gradually — do not jump more than 10-15% week to week
-- Include a proper taper (1-3 weeks depending on race distance)
-- The last week should be phase "race" with reduced volume
-- recovery weeks every 3-4 weeks with reduced volume
-Output ONLY the JSON array contents — I will provide the opening {"weeks":[  prefix.`;
+phase values: "base", "build", "peak", "taper", "race", "base_recovery", "build_recovery", "peak_recovery"
+Output ONLY the JSON array contents -- I will provide the opening {"weeks":[ prefix.`;
 
   const response = await getAnthropic().messages.create({
     model: 'claude-sonnet-4-20250514',
@@ -293,119 +208,190 @@ Output ONLY the JSON array contents — I will provide the opening {"weeks":[  p
 
 function parseMacroResponse(text, weeksToRace) {
   let jsonStr = text.trim();
-  // Strip markdown fences if model added them despite prefill
-  if (jsonStr.startsWith('```')) {
-    jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
-  }
-  // Strip trailing junk after closing brace
+  if (jsonStr.startsWith('```')) jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
   const lastBrace = jsonStr.lastIndexOf('}');
-  if (lastBrace !== -1 && lastBrace < jsonStr.length - 1) {
-    jsonStr = jsonStr.substring(0, lastBrace + 1);
-  }
+  if (lastBrace !== -1 && lastBrace < jsonStr.length - 1) jsonStr = jsonStr.substring(0, lastBrace + 1);
 
   const plan = JSON.parse(jsonStr);
+  if (!plan.weeks || !Array.isArray(plan.weeks)) throw new Error('Invalid macro plan: missing weeks array');
+  if (plan.weeks.length !== weeksToRace) console.warn(`Macro plan has ${plan.weeks.length} weeks, expected ${weeksToRace}`);
 
-  if (!plan.weeks || !Array.isArray(plan.weeks)) {
-    throw new Error('Invalid macro plan: missing weeks array');
-  }
-
-  if (plan.weeks.length !== weeksToRace) {
-    console.warn(`Macro plan has ${plan.weeks.length} weeks, expected ${weeksToRace}`);
-  }
-
-  // Validate each week
+  const validPhases = ['base', 'build', 'peak', 'taper', 'race', 'base_recovery', 'build_recovery', 'peak_recovery'];
   for (const week of plan.weeks) {
     if (!week.week_number || !week.phase || !week.km_target) {
       console.warn(`Macro week ${week.week_number}: missing required fields`);
     }
-    if (!['base', 'build', 'peak', 'taper', 'race'].includes(week.phase)) {
+    if (!validPhases.includes(week.phase)) {
       console.warn(`Macro week ${week.week_number}: invalid phase "${week.phase}"`);
-    }
-    if (week.intensity && !['easy', 'moderate', 'hard', 'recovery'].includes(week.intensity)) {
-      console.warn(`Macro week ${week.week_number}: invalid intensity "${week.intensity}"`);
     }
   }
 
   return plan;
 }
 
+
 /**
  * Layer 2: Generate detailed workouts for a single week
- * Uses macro plan context + live monitoring data
+ * Uses PART 2 of the plan generation methodology document
+ * Includes intensity distribution rules, workout templates, adaptation rules
  */
-export async function generateWeeklyDetail(athlete, profile, weekContext, monitoringData, previousWeeksSummary) {
-  const ctx = buildAthleteContext(athlete, profile);
+export async function generateWeeklyDetail(athlete, profile, weekContext, monitoringData, previousWeeksSummary, redFlagWarnings = []) {
+  const level = deriveAthleteLevel(athlete.weekly_km).level;
+  const vdot = athlete.vdot || 25;
+  const goalTimeStr = formatGoalTime(athlete.goal_time_seconds);
+  const trainingDays = athlete.available_days?.length || 4;
+  const unavailableDays = getUnavailableDays(athlete.available_days);
 
-  // Build surrounding weeks context
-  const surroundingStr = (weekContext.surrounding || [])
-    .map(w => `  - Week ${w.week_number}: ${w.phase}, ${w.km_target}km, ${w.intensity}`)
-    .join('\n');
+  // Build pace strings
+  const paces = {
+    easy: `${formatPaceMinKm(athlete.pace_easy_min)} - ${formatPaceMinKm(athlete.pace_easy_max)}`,
+    marathon: formatPaceMinKm(athlete.pace_tempo),
+    threshold: formatPaceMinKm(athlete.pace_lt),
+    interval: formatPaceMinKm(athlete.pace_vo2max),
+    racePace: formatPaceMinKm(athlete.pace_race),
+    recovery: formatPaceMinKm((athlete.pace_easy_max || 0) + 30),
+  };
 
-  // Build monitoring context
-  let monitoringStr = 'No monitoring data available.';
-  if (monitoringData) {
-    const parts = [];
-    if (monitoringData.acwr) {
-      parts.push(`- ACWR: ${monitoringData.acwr.ratio} (${monitoringData.acwr.zone} zone)`);
-    }
-    if (monitoringData.readiness?.average_7d != null) {
-      parts.push(`- Readiness (7d avg): ${monitoringData.readiness.average_7d}/5`);
-    }
-    if (monitoringData.compliance?.rate != null) {
-      parts.push(`- Compliance: ${monitoringData.compliance.rate}%`);
-    }
-    if (monitoringData.rpe_7d_avg != null) {
-      parts.push(`- RPE (7d avg): ${monitoringData.rpe_7d_avg}/10`);
-    }
-    if (monitoringData.flags?.length > 0) {
-      parts.push(`- Flags: ${monitoringData.flags.map(f => f.message).join('; ')}`);
-    }
-    if (parts.length > 0) {
-      monitoringStr = parts.join('\n');
-    }
-  }
+  // Build previous week data block
+  const prevWeek = previousWeeksSummary?.length > 0
+    ? previousWeeksSummary[previousWeeksSummary.length - 1]
+    : null;
 
-  // Build previous weeks context
-  let prevStr = 'No previous week data.';
-  if (previousWeeksSummary?.length > 0) {
-    prevStr = previousWeeksSummary
-      .map(w => `  - Week ${w.week_number} (${w.phase}): Target ${w.km_target}km, Completed ${w.actual_km}km, Compliance ${w.compliance}%`)
-      .join('\n');
-  }
+  const prevWeekBlock = prevWeek ? `Completed km: ${prevWeek.actual_km || 'N/A'} (planned: ${prevWeek.km_target || 'N/A'})
+Adherence: ${prevWeek.compliance != null ? prevWeek.compliance + '%' : 'N/A'}
+Average session RPE: ${monitoringData?.rpe_7d_avg != null ? monitoringData.rpe_7d_avg + ' / 10' : 'N/A'}
+ACWR: ${monitoringData?.acwr?.ratio != null ? monitoringData.acwr.ratio + '  [safe zone: 0.8-1.3; caution: 1.3-1.5; danger: >1.5]' : 'N/A'}
+Average readiness score: ${monitoringData?.readiness?.average_7d != null ? monitoringData.readiness.average_7d + ' / 5' : 'N/A'}
+Reported pain/injury flags: ${monitoringData?.pain_flags?.length > 0 ? monitoringData.pain_flags.map(f => `${f.pain_location} (severity ${f.pain_severity || '?'})`).join(', ') : 'None'}
+Notes from athlete: ${prevWeek.athlete_notes || 'None'}` : `No previous week data available.`;
 
-  const prompt = `You are an elite running coach creating a SINGLE WEEK of detailed workouts for a runner in Bogotá, Colombia (altitude ~2,640m).
+  // Build red flag warnings string
+  const redFlagStr = redFlagWarnings.length > 0
+    ? '\nRED FLAG OVERRIDES (apply these BEFORE normal generation rules):\n' + redFlagWarnings.map(w => `- ${w}`).join('\n')
+    : '';
 
-${ctx.block}
-- Weeks to race: ${weekContext.total_weeks - weekContext.week_number + 1} remaining
+  const prompt = `You are an expert running coach for The Run Hub Bogota. Generate a detailed 7-day training week.
 
-THIS WEEK'S MACRO PLAN:
-- Week ${weekContext.week_number} of ${weekContext.total_weeks}
-- Phase: ${weekContext.phase}
-- Target volume: ${weekContext.km_target}km
-- Intensity focus: ${weekContext.intensity}
-- Coach notes: ${weekContext.notes || 'None'}
+=== ATHLETE PROFILE ===
+Name: ${profile.full_name}
+Level: ${level} (beginner / recreational / intermediate)
+Current VDOT: ${vdot} (calculated from recent race or time trial)
+Training days available: ${trainingDays} days/week (preferred days: ${athlete.available_days?.join(', ') || 'any'})
+Goal: ${athlete.goal_race} -- ${goalTimeStr} half marathon
+Injuries/limitations: ${athlete.injuries || 'None'}
 
-SURROUNDING WEEKS (context for progression):
-${surroundingStr || '  None available'}
+=== ATHLETE TRAINING PACES (Bogota altitude-adjusted, already +15 sec/km on threshold+) ===
+Easy (E) pace: ${paces.easy} min/km  [HR: 65-79% max, fully conversational]
+Marathon (M) pace: ${paces.marathon} min/km
+Threshold (T) pace: ${paces.threshold} min/km  [HR: 88-92% max, comfortably hard]
+Interval (I) pace: ${paces.interval} min/km  [HR: 98-100% max, very hard]
+Race pace (HM goal): ${paces.racePace} min/km
+Recovery pace: ${paces.recovery} min/km  [30 sec/km slower than easy]
 
-ATHLETE CURRENT STATE (monitoring):
-${monitoringStr}
+=== THIS WEEK ===
+Week number: ${weekContext.week_number} of ${weekContext.total_weeks}
+Phase: ${weekContext.phase} (base / build / peak / taper / base_recovery / build_recovery / peak_recovery)
+Weekly km target: ${weekContext.km_target} km
+Special notes from coach: ${weekContext.notes || 'None'}
 
-PREVIOUS WEEKS RESULTS:
-${prevStr}
+=== PREVIOUS WEEK DATA (for adaptation) ===
+${prevWeekBlock}
+${redFlagStr}
 
-Generate the 7-day workout schedule for THIS WEEK ONLY.
-${monitoringData?.acwr?.zone === 'red' ? 'WARNING: ACWR is in the RED zone. Reduce intensity and volume accordingly.' : ''}
-${monitoringData?.acwr?.zone === 'yellow' ? 'CAUTION: ACWR is in the YELLOW zone. Be conservative with volume increases.' : ''}
+=== PLAN GENERATION RULES ===
 
-RESPOND IN STRICT JSON FORMAT:
+**INTENSITY DISTRIBUTION (apply strictly by phase):**
+
+BASE phase:
+- 80-100% of sessions = Easy (E) pace
+- 0 quality sessions (only strides at end of easy runs, 4-6 x 20sec)
+- 1 long run per week at E pace (20-25% of weekly km)
+- Beginners: NO strides until week 3+
+
+BUILD phase:
+- 70-80% Easy, 10-15% Threshold, 5-10% Intervals (recreational/intermediate only)
+- 1-2 quality sessions per week (NEVER on consecutive days)
+- Beginners: 1 quality session max (tempo/fartlek only -- NO VO2max intervals)
+- Recreational: 1 threshold session + 1 long run per week
+- Intermediate: 1 threshold + 1 interval session + 1 long run per week
+- Long run: E pace with optional final 2-3 km at M pace (from week 3+ of build)
+
+PEAK phase:
+- 65-75% Easy, 10-15% Threshold, 5-10% Race pace
+- 2 quality sessions per week (threshold + race pace work)
+- Beginners: 1 quality only (race pace segments in long run)
+- Intermediate: threshold + VO2max intervals (until 6 weeks before race), then threshold + race pace
+- Race pace work intensifies: 3-5 km at HM pace -> 8-10 km at HM pace
+- Long run: progression run (E pace -> final 3-5 km at M or HM pace)
+
+TAPER phase:
+- 75-85% Easy, 5-10% Threshold/Race pace
+- Volume drops 40-60% from peak
+- Quality: 1 short race pace session (20-30 min) per week
+- Long run reduced to 50-60% of peak long run
+- No new stimuli. Maintain sharpness only.
+
+RECOVERY WEEK (any phase marked _recovery):
+- Volume: 25-30% below previous non-recovery week
+- Intensity: Easy only. Drop ALL quality sessions.
+- 1 easy long run (shorter than usual)
+- Strides are OK on 1 easy day
+- Purpose: absorb training, reduce fatigue, restore readiness
+
+**WORKOUT TYPE TEMPLATES:**
+
+Easy Run: "[X] km at easy pace (${paces.easy} min/km). Fully conversational. HR 65-79% max. Include 5 min walk warm-up and cool-down."
+
+Recovery Run: "[X] km at recovery pace (${paces.recovery} min/km). Very easy. 20-35 min max. For active recovery only."
+
+Long Run: "[X] km at easy pace (${paces.easy} min/km). Build to 25% of weekly volume. Stay conversational throughout. Carry water/gel if >75 min."
+
+Strides: "After easy run: 4-6 x 20-second accelerations at controlled fast pace (NOT sprint). 90 sec walk recovery between each. Focus on form, not speed."
+
+Tempo Run (continuous): "Warm up 10-15 min easy. [X] min at threshold pace (${paces.threshold} min/km). Cool down 10 min easy. RPE 7/10. Comfortably hard -- can say a few words."
+
+Cruise Intervals: "Warm up 10 min easy. [N x X min] at threshold pace (${paces.threshold} min/km) with [Y] min easy jog recovery. Cool down 10 min easy. RPE 7/10."
+
+VO2max Intervals: "Warm up 15 min easy. [N x X min or Xm] at interval pace (${paces.interval} min/km). Equal time recovery jog between reps. Cool down 15 min easy. RPE 9/10. Hard but controlled."
+
+Race Pace Segments: "Within easy/long run: [N x X km] at goal race pace (${paces.racePace} min/km) with [Y] min easy jog between. Practice race day rhythm."
+
+Fartlek: "30-40 min easy run with [N x 1 min] surges at 'comfortably hard' effort (RPE 7). 2 min easy between surges. Unstructured -- good intro to quality work for beginners."
+
+Rest Day: "Complete rest or gentle 20-30 min walk. No running."
+
+**ADAPTATION RULES (apply based on previous week data):**
+
+If ACWR > 1.5: REDUCE this week's km by 15-20%. Eliminate highest-intensity session. Add recovery run instead.
+If ACWR < 0.8: Can increase 5-10% above plan target if readiness is good.
+If avg RPE was >=2pts above target for 2+ sessions: Reduce intensity one zone down this week.
+If avg RPE was >=2pts below target for full week: Consider slight volume increase (+5%).
+If readiness avg < 3/5 for 3+ days: Insert extra rest day. Reduce volume 10-15%.
+If pain/injury flag reported: NOTE the flag in the relevant workout. Suggest alternative (pool run, cycling) if pain is ongoing.
+If adherence < 70%: Don't increase volume. Investigate cause in coach notes.
+If adherence > 95% and ACWR is safe: Can progress normally.
+
+**STRUCTURE RULES:**
+- NEVER schedule quality sessions on consecutive days
+- Long run always on weekend (Saturday or Sunday)
+- Recovery run after quality session the next day (not rest, unless readiness is very low)
+- Beginner: max 2 quality days/week total (strides count as 0.5)
+- No more than 3 consecutive days of running without a rest or cross-training day
+- Rest days on days athlete marked as unavailable: ${unavailableDays.join(', ') || 'None'}
+
+=== OUTPUT FORMAT ===
+Respond ONLY with JSON. No explanation. No markdown. I will provide the opening prefix.
+
+Each workout must have these exact fields:
 {
+  "week_summary": "One sentence describing the week's focus and key workout",
+  "total_km": 35,
   "workouts": [
     {
       "day_of_week": 0,
       "workout_type": "easy|tempo|long_run|intervals|race_pace|recovery|rest|cross_training|race",
-      "title": "Easy Run",
-      "description": "One-line summary of the session",
+      "title": "Descriptive title",
+      "description": "Full workout description with warm-up, main set, cool-down, paces, and durations as per the templates above",
       "distance_km": 8,
       "duration_minutes": 48,
       "pace_target_sec_km": 360,
@@ -414,60 +400,25 @@ RESPOND IN STRICT JSON FORMAT:
       "hr_zone": "Z2",
       "rpe_target": 4,
       "intervals_detail": null,
-      "coach_notes": "Keep heart rate below 145bpm",
-      "session_structure": {
-        "warm_up": {
-          "distance_km": 1.5,
-          "duration_minutes": 10,
-          "pace_sec_km": 390,
-          "hr_zone": "Z1",
-          "description": "Easy jog building gradually"
-        },
-        "main_set": [
-          {
-            "type": "steady",
-            "distance_km": 5,
-            "pace_sec_km": 360,
-            "hr_zone": "Z2",
-            "rpe": 4,
-            "description": "Steady easy run"
-          }
-        ],
-        "cool_down": {
-          "distance_km": 1.5,
-          "duration_minutes": 10,
-          "pace_sec_km": 400,
-          "hr_zone": "Z1",
-          "description": "Easy jog + light stretching"
-        }
-      }
+      "coach_notes": "Practical coaching tip for this specific session"
     }
   ]
 }
 
 day_of_week: 0=Monday, 1=Tuesday, ..., 6=Sunday
-Only include workouts on the athlete's available days: ${athlete.available_days?.join(', ')}.
-Rest days should still be listed with workout_type "rest" (rest days have session_structure: null, rpe_target: null).
-The total distance of all workouts should be approximately ${weekContext.km_target}km (within 10%).
-For interval workouts, include intervals_detail AND use session_structure.main_set with type "intervals".
-rpe_target: expected RPE 1-10 for the overall session.
-
-IMPORTANT — session_structure rules:
-- Every non-rest workout MUST have session_structure with warm_up, main_set (array), and cool_down.
-- warm_up and cool_down are objects with: distance_km, duration_minutes, pace_sec_km, hr_zone, description.
-- main_set is an array of 1+ elements. Each element has: type ("steady"|"intervals"|"tempo"|"progression"), distance_km or distance_m (for intervals), pace_sec_km, hr_zone, rpe (1-10), description.
-- For intervals type: also include reps, distance_m, rest_seconds, rest_type ("jog"|"walk"|"stand").
-- For interval workouts also set intervals_detail: {"reps": 6, "distance_m": 800, "pace_sec_km": 240, "rest_seconds": 120, "rest_type": "jog"}
-- The sum of warm_up.distance_km + main_set distances + cool_down.distance_km should approximately equal the total distance_km.
-- description field remains a one-line summary for backward compatibility.
-Output ONLY the JSON array contents — I will provide the opening {"workouts":[  prefix.`;
+workout_type values: "easy", "tempo", "long_run", "intervals", "race_pace", "recovery", "rest", "cross_training", "race"
+All 7 days must be included. Rest days have distance_km: 0, duration_minutes: 0, pace_target_sec_km: null, rpe_target: null.
+pace_target_sec_km, pace_range_min, pace_range_max are integers (seconds per km).
+For interval workouts, set intervals_detail: {"reps": N, "distance_m": X, "pace_sec_km": Y, "rest_seconds": Z, "rest_type": "jog|walk|stand"}
+Total distance across all workouts should be approximately ${weekContext.km_target}km (within 10%).
+Output ONLY the JSON array contents -- I will provide the opening prefix.`;
 
   const response = await getAnthropic().messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 5000,
     messages: [
       { role: 'user', content: prompt },
-      { role: 'assistant', content: '{"workouts":[' },
+      { role: 'assistant', content: '{"week_summary":"' },
     ],
   });
 
@@ -477,21 +428,15 @@ Output ONLY the JSON array contents — I will provide the opening {"workouts":[
   }
 
   console.log(`Weekly detail tokens: ${response.usage?.input_tokens} in / ${response.usage?.output_tokens} out`);
-  const content = '{"workouts":[' + response.content[0].text;
+  const content = '{"week_summary":"' + response.content[0].text;
   return parseWeeklyDetailResponse(content);
 }
 
 function parseWeeklyDetailResponse(text) {
   let jsonStr = text.trim();
-  // Strip markdown fences if model added them despite prefill
-  if (jsonStr.startsWith('```')) {
-    jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
-  }
-  // Strip trailing junk after closing brace
+  if (jsonStr.startsWith('```')) jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
   const lastBrace = jsonStr.lastIndexOf('}');
-  if (lastBrace !== -1 && lastBrace < jsonStr.length - 1) {
-    jsonStr = jsonStr.substring(0, lastBrace + 1);
-  }
+  if (lastBrace !== -1 && lastBrace < jsonStr.length - 1) jsonStr = jsonStr.substring(0, lastBrace + 1);
 
   const result = JSON.parse(jsonStr);
 
@@ -499,12 +444,91 @@ function parseWeeklyDetailResponse(text) {
     throw new Error('Invalid weekly detail: missing workouts array');
   }
 
-  // Soft-validate session_structure presence on non-rest workouts
+  // Validate workout types
+  const validTypes = ['easy', 'tempo', 'long_run', 'intervals', 'race_pace', 'recovery', 'rest', 'cross_training', 'race'];
   for (const w of result.workouts) {
-    if (w.workout_type !== 'rest' && !w.session_structure) {
-      console.warn(`Weekly detail: workout "${w.title}" missing session_structure, will use description fallback`);
+    if (!validTypes.includes(w.workout_type)) {
+      console.warn(`Weekly detail: invalid workout_type "${w.workout_type}" for "${w.title}"`);
     }
   }
 
   return result;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   RED FLAG DETECTION (PART 4)
+   Pre-generation safety checks based on monitoring data
+   ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * Check athlete monitoring data for red flags before generating a week
+ * Returns override instructions to inject into the AI prompt
+ */
+export function checkRedFlags(monitoringData, previousWeeksSummary, athlete) {
+  const warnings = [];
+  let forceRecovery = false;
+  let kmReduction = 0;
+
+  if (!monitoringData) return { forceRecovery, warnings, kmReduction };
+
+  // 1. ACWR > 1.5 — mandatory recovery
+  if (monitoringData.acwr?.ratio > 1.5) {
+    warnings.push('ACWR is ' + monitoringData.acwr.ratio + ' (DANGER >1.5). Mandatory volume reduction 15-20%. Eliminate highest-intensity session. Replace with recovery run.');
+    forceRecovery = true;
+    kmReduction = 0.2; // 20% reduction
+  }
+
+  // 2. Readiness < 2/5 average — forced recovery
+  if (monitoringData.readiness?.average_7d != null && monitoringData.readiness.average_7d < 2) {
+    warnings.push('Readiness average is ' + monitoringData.readiness.average_7d + '/5 (critically low). Insert full recovery week. Reduce volume 30-50%.');
+    forceRecovery = true;
+    kmReduction = Math.max(kmReduction, 0.4); // 40% reduction
+  }
+
+  // 3. Pain same location 3+ days
+  if (monitoringData.pain_flags?.length >= 3) {
+    const locations = {};
+    for (const f of monitoringData.pain_flags) {
+      const loc = (f.pain_location || 'unknown').toLowerCase();
+      locations[loc] = (locations[loc] || 0) + 1;
+    }
+    for (const [loc, count] of Object.entries(locations)) {
+      if (count >= 3) {
+        warnings.push(`Pain in ${loc} reported ${count} times in 7 days. Include injury note. Suggest alternative (pool run, cycling) for high-impact sessions. Reduce long run by 20%.`);
+      }
+    }
+  }
+
+  // 4. RPE 9-10 on easy runs
+  if (monitoringData.feedback?.recent) {
+    const easyHighRpe = monitoringData.feedback.recent.filter(
+      f => f.workouts?.workout_type === 'easy' && f.rpe >= 9
+    );
+    if (easyHighRpe.length >= 2) {
+      warnings.push('RPE consistently 9-10 on easy runs. Paces may be too fast. Prescribe HR-only easy runs this week (ignore pace, stay in Z1-Z2 by feel).');
+    }
+  }
+
+  // 5. Low compliance 2+ weeks
+  if (monitoringData.compliance?.rate != null && monitoringData.compliance.rate < 60) {
+    const prevLowCompliance = previousWeeksSummary?.some(w => w.compliance != null && w.compliance < 60);
+    if (prevLowCompliance) {
+      warnings.push('Adherence below 60% for 2+ weeks. Do NOT increase volume. Keep at current level or reduce slightly. Flag for coach conversation.');
+    }
+  }
+
+  // 6. Recurring injury from athlete profile matching pain flags
+  if (athlete?.injuries && monitoringData.pain_flags?.length > 0) {
+    const injuryText = athlete.injuries.toLowerCase();
+    for (const flag of monitoringData.pain_flags) {
+      const loc = (flag.pain_location || '').toLowerCase();
+      if (loc && injuryText.includes(loc)) {
+        warnings.push(`Recurring injury: ${loc} matches athlete history ("${athlete.injuries}"). Reduce long run by 20%. Add activation/prehab note for ${loc}.`);
+        break;
+      }
+    }
+  }
+
+  return { forceRecovery, warnings, kmReduction };
 }

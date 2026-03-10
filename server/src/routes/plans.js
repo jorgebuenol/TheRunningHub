@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { coachOnly } from '../middleware/auth.js';
-import { generateTrainingPlan, generateMacroPlan, generateWeeklyDetail } from '../services/planGenerator.js';
+import { generateTrainingPlan, generateMacroPlan, generateWeeklyDetail, checkRedFlags, deriveAthleteLevel, intensityFromPhase } from '../services/planGenerator.js';
 import { getAthleteMonitoringSummary } from '../services/monitoring.js';
 import { addDays, startOfWeek } from '../utils/dates.js';
 import { isOnboardingComplete, getMissingSections } from '../utils/onboardingProgress.js';
@@ -11,6 +11,7 @@ export const planRoutes = Router();
 planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
   try {
     const { athleteId } = req.params;
+    const { levelOverride, vdotOverride, magicMileSeconds, isRunWalk } = req.body || {};
 
     // Fetch athlete with profile
     const { data: athlete, error: athleteErr } = await req.supabase
@@ -36,10 +37,23 @@ planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
       });
     }
 
+    // If Magic Mile was provided, estimate VDOT from it
+    let effectiveVdot = vdotOverride || athlete.vdot;
+    if (magicMileSeconds && !vdotOverride) {
+      // Jeff Galloway: mile time × 1.2 → estimated HM pace (sec/km)
+      // Then map to approximate VDOT
+      const hmPaceSecKm = (magicMileSeconds * 1.2) / 21.1;
+      effectiveVdot = estimateVdotFromHmPace(hmPaceSecKm);
+      console.log(`Magic Mile ${magicMileSeconds}s → est HM pace ${Math.round(hmPaceSecKm)}s/km → VDOT ${effectiveVdot}`);
+    }
+
+    // Build overrides object for AI prompt
+    const overrides = { levelOverride, vdotOverride: effectiveVdot, isRunWalk };
+
     // Generate macro periodization skeleton with AI
     let macroPlan;
     try {
-      macroPlan = await generateMacroPlan(athlete, athlete.profiles);
+      macroPlan = await generateMacroPlan(athlete, athlete.profiles, overrides);
     } catch (aiErr) {
       const msg = aiErr.message || '';
       if (msg.includes('credit balance')) {
@@ -51,6 +65,9 @@ planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
     const weeksToRace = Math.ceil(
       (new Date(athlete.goal_race_date) - new Date()) / (7 * 24 * 60 * 60 * 1000)
     );
+
+    // Derive level for DB storage
+    const level = levelOverride || deriveAthleteLevel(athlete.weekly_km).level;
 
     // Create the training plan record
     const { data: plan, error: planErr } = await req.supabase
@@ -78,19 +95,32 @@ planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
       const weekStart = new Date(planStart);
       weekStart.setDate(weekStart.getDate() + (week.week_number - 1) * 7);
 
-      const { error: weekErr } = await req.supabase
+      const weekRow = {
+        plan_id: plan.id,
+        week_number: week.week_number,
+        phase: week.phase,
+        total_km: null,
+        km_target: week.km_target,
+        intensity: intensityFromPhase(week.phase),
+        notes: week.intensity_focus || week.notes || null,
+        is_generated: false,
+        start_date: weekStart.toISOString().split('T')[0],
+      };
+
+      // Add is_recovery if column exists (requires migration 007)
+      weekRow.is_recovery = week.is_recovery || false;
+
+      let { error: weekErr } = await req.supabase
         .from('plan_weeks')
-        .insert({
-          plan_id: plan.id,
-          week_number: week.week_number,
-          phase: week.phase,
-          total_km: null,
-          km_target: week.km_target,
-          intensity: week.intensity,
-          notes: week.notes,
-          is_generated: false,
-          start_date: weekStart.toISOString().split('T')[0],
-        });
+        .insert(weekRow);
+
+      // Fallback: if is_recovery column doesn't exist yet, retry without it
+      if (weekErr?.code === '42703' && weekErr?.message?.includes('is_recovery')) {
+        console.warn('is_recovery column not found — run migration 007_recovery_phases.sql');
+        delete weekRow.is_recovery;
+        const retry = await req.supabase.from('plan_weeks').insert(weekRow);
+        weekErr = retry.error;
+      }
 
       if (weekErr) throw weekErr;
     }
@@ -136,24 +166,40 @@ planRoutes.post('/:planId/weeks/:weekId/generate', coachOnly, async (req, res, n
     // 4. Build previous weeks summary
     const previousWeeksSummary = buildPreviousWeeksSummary(fullPlan.plan_weeks, targetWeek.week_number);
 
+    // 4b. Red Flag Override Logic (PART 4 of methodology)
+    const redFlags = checkRedFlags(monitoringData, previousWeeksSummary, athlete);
+    let effectiveWeek = { ...targetWeek };
+
+    if (redFlags.forceRecovery) {
+      // Override phase to recovery variant
+      const basePhase = effectiveWeek.phase?.replace('_recovery', '') || 'base';
+      effectiveWeek.phase = `${basePhase}_recovery`;
+      // Reduce km target
+      if (redFlags.kmReduction > 0) {
+        effectiveWeek.km_target = Math.round((effectiveWeek.km_target || 0) * (1 - redFlags.kmReduction));
+      }
+      console.log(`Red flags triggered recovery override: ${redFlags.warnings.length} warning(s), km reduced to ${effectiveWeek.km_target}`);
+    }
+
     // 5. Build surrounding weeks context from macro plan
     const surrounding = (fullPlan.plan_weeks || [])
       .filter(w => Math.abs(w.week_number - targetWeek.week_number) <= 2 && w.week_number !== targetWeek.week_number)
       .map(w => ({ week_number: w.week_number, phase: w.phase, km_target: w.km_target, intensity: w.intensity }));
 
-    // 6. Generate weekly detail via AI
+    // 6. Generate weekly detail via AI (pass red flag warnings into prompt)
     let weekDetail;
     try {
       weekDetail = await generateWeeklyDetail(
         athlete,
         athlete.profiles,
         {
-          ...targetWeek,
+          ...effectiveWeek,
           total_weeks: fullPlan.total_weeks,
           surrounding,
         },
         monitoringData,
-        previousWeeksSummary
+        previousWeeksSummary,
+        redFlags.warnings
       );
     } catch (aiErr) {
       const msg = aiErr.message || '';
@@ -195,11 +241,27 @@ planRoutes.post('/:planId/weeks/:weekId/generate', coachOnly, async (req, res, n
 
     if (workoutsErr) throw workoutsErr;
 
-    // 8. Update week: mark as generated, set total_km from workouts
+    // 8. Update week: mark as generated, set total_km, save week_summary + phase overrides
     const totalKm = workouts.reduce((sum, w) => sum + (parseFloat(w.distance_km) || 0), 0);
+    const weekUpdate = {
+      is_generated: true,
+      total_km: Math.round(totalKm * 10) / 10,
+    };
+    // Save week_summary from AI response
+    if (weekDetail.week_summary) {
+      weekUpdate.notes = weekDetail.week_summary;
+    }
+    // If red flags forced a recovery override, persist the phase + km changes
+    if (redFlags.forceRecovery) {
+      weekUpdate.phase = effectiveWeek.phase;
+      weekUpdate.km_target = effectiveWeek.km_target;
+      weekUpdate.is_recovery = true;
+      weekUpdate.intensity = intensityFromPhase(effectiveWeek.phase);
+    }
+
     const { error: updateErr } = await req.supabase
       .from('plan_weeks')
-      .update({ is_generated: true, total_km: Math.round(totalKm * 10) / 10 })
+      .update(weekUpdate)
       .eq('id', weekId);
 
     if (updateErr) throw updateErr;
@@ -292,6 +354,7 @@ planRoutes.post('/:planId/unpublish', coachOnly, async (req, res, next) => {
           km_target: week.km_target,
           intensity: week.intensity,
           is_generated: week.is_generated,
+          is_recovery: week.is_recovery || false,
           start_date: week.start_date,
           notes: week.notes,
         })
@@ -571,6 +634,35 @@ function getMonday(date) {
   d.setDate(diff);
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+/**
+ * Estimate VDOT from HM pace (sec/km) using the altitude-adjusted pace table
+ * Returns the closest VDOT value from the appendix
+ */
+function estimateVdotFromHmPace(paceSecKm) {
+  const table = [
+    { vdot: 25, hmPace: 450 }, // 7:30
+    { vdot: 30, hmPace: 400 }, // 6:40
+    { vdot: 35, hmPace: 360 }, // 6:00
+    { vdot: 40, hmPace: 330 }, // 5:30
+    { vdot: 45, hmPace: 306 }, // 5:06
+    { vdot: 50, hmPace: 287 }, // 4:47
+    { vdot: 55, hmPace: 272 }, // 4:32
+    { vdot: 60, hmPace: 258 }, // 4:18
+  ];
+
+  // Find the closest match
+  let closest = table[0];
+  let minDiff = Math.abs(paceSecKm - table[0].hmPace);
+  for (const row of table) {
+    const diff = Math.abs(paceSecKm - row.hmPace);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = row;
+    }
+  }
+  return closest.vdot;
 }
 
 /**
