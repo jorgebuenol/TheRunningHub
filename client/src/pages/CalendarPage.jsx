@@ -1,0 +1,786 @@
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { api } from '../lib/api';
+import { formatPace } from '../lib/vdot';
+import { useAuth } from '../context/AuthContext';
+import WorkoutFeedbackModal from '../components/athletes/WorkoutFeedbackModal';
+import {
+  ArrowLeft, ChevronLeft, ChevronRight, Check, X, Edit3, Save,
+  Calendar as CalendarIcon, LayoutGrid, Flag, MessageSquare,
+} from 'lucide-react';
+import {
+  startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval,
+  addMonths, subMonths, addWeeks, subWeeks, format, isSameMonth,
+  isToday, isSameDay, parseISO,
+} from 'date-fns';
+
+/* ─── Color scheme ─── */
+const WORKOUT_COLORS = {
+  easy:           { bg: 'bg-green-500/20',    border: 'border-green-500',    text: 'text-green-400',    label: 'Easy Run' },
+  tempo:          { bg: 'bg-orange-500/20',   border: 'border-orange-500',   text: 'text-orange-400',   label: 'Tempo' },
+  long_run:       { bg: 'bg-blue-500/20',     border: 'border-blue-500',     text: 'text-blue-400',     label: 'Long Run' },
+  intervals:      { bg: 'bg-red-500/20',      border: 'border-red-500',      text: 'text-red-400',      label: 'Intervals' },
+  race_pace:      { bg: 'bg-volt/20',         border: 'border-volt',         text: 'text-volt',         label: 'Race Pace' },
+  recovery:       { bg: 'bg-green-500/10',    border: 'border-green-500/50', text: 'text-green-300',    label: 'Recovery' },
+  rest:           { bg: 'bg-smoke/10',        border: 'border-smoke/50',     text: 'text-smoke',        label: 'Rest' },
+  cross_training: { bg: 'bg-purple-500/20',   border: 'border-purple-500',   text: 'text-purple-400',   label: 'Strength' },
+  race:           { bg: 'bg-volt/30',         border: 'border-volt',         text: 'text-volt',         label: 'Race Day' },
+};
+
+const DAY_NAMES = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+
+function getColors(type) {
+  return WORKOUT_COLORS[type] || WORKOUT_COLORS.rest;
+}
+
+export default function CalendarPage() {
+  const { athleteId: paramAthleteId } = useParams();
+  const { isCoach } = useAuth();
+
+  const [view, setView] = useState('week');
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [athlete, setAthlete] = useState(null);
+  const [plan, setPlan] = useState(null);
+  const [monitoring, setMonitoring] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedWorkout, setSelectedWorkout] = useState(null);
+  const [editingWorkout, setEditingWorkout] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [feedbackWorkout, setFeedbackWorkout] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  /* ─── Data loading ─── */
+  useEffect(() => { loadData(); }, [paramAthleteId]);
+
+  async function loadData() {
+    try {
+      const athleteData = paramAthleteId
+        ? await api.getAthlete(paramAthleteId)
+        : await api.getMyProfile();
+      setAthlete(athleteData);
+
+      const activePlan = athleteData.training_plans?.find(p => p.status === 'approved')
+        || athleteData.training_plans?.[0];
+      if (activePlan) {
+        const planData = await api.getPlan(activePlan.id);
+        setPlan(planData);
+      }
+
+      const monData = await api.getMonitoring(athleteData.id).catch(() => null);
+      setMonitoring(monData);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /* ─── Build workout lookup by date ─── */
+  const workoutsByDate = useMemo(() => {
+    const map = {};
+    if (!plan?.plan_weeks) return map;
+    for (const week of plan.plan_weeks) {
+      for (const w of week.workouts || []) {
+        if (w.workout_date) {
+          map[w.workout_date] = { ...w, phase: week.phase, week_number: week.week_number };
+        }
+      }
+    }
+    return map;
+  }, [plan]);
+
+  /* ─── Week helpers ─── */
+  const getWeekStart = useCallback((date) => {
+    return startOfWeek(date, { weekStartsOn: 1 });
+  }, []);
+
+  const weekStart = useMemo(() => getWeekStart(currentDate), [currentDate, getWeekStart]);
+
+  // Compute 7 days of current week
+  const weekDates = useMemo(() => {
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      days.push(new Date(weekStart.valueOf() + i * 86400000));
+    }
+    return days;
+  }, [weekStart]);
+
+  /* ─── Current week plan data ─── */
+  const currentWeekData = useMemo(() => {
+    if (!plan?.plan_weeks?.length || !weekDates.length) return null;
+    const firstDay = format(weekDates[0], 'yyyy-MM-dd');
+    // Find the plan week that contains the first day of the displayed week
+    for (const w of plan.plan_weeks) {
+      for (const wo of w.workouts || []) {
+        if (wo.workout_date === firstDay) return w;
+      }
+    }
+    return null;
+  }, [plan, weekDates]);
+
+  /* ─── Month helpers ─── */
+  const monthDays = useMemo(() => {
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
+    const calStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+    const calEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+    return eachDayOfInterval({ start: calStart, end: calEnd });
+  }, [currentDate]);
+
+  /* ─── Week summary stats ─── */
+  const weekSummary = useMemo(() => {
+    let plannedKm = 0, completedKm = 0, plannedMin = 0, completedMin = 0;
+    const dates = view === 'week' ? weekDates : [];
+
+    // For week view, sum from the 7 visible days
+    if (view === 'week') {
+      for (const d of dates) {
+        const key = format(d, 'yyyy-MM-dd');
+        const w = workoutsByDate[key];
+        if (!w || w.workout_type === 'rest') continue;
+        plannedKm += w.distance_km || 0;
+        plannedMin += w.duration_minutes || 0;
+        if (w.status === 'completed') {
+          completedKm += w.actual_distance_km || w.distance_km || 0;
+          completedMin += w.actual_duration_minutes || w.duration_minutes || 0;
+        }
+      }
+    }
+
+    const acwrObj = monitoring?.acwr;
+    const acwrRatio = typeof acwrObj === 'number' ? acwrObj : acwrObj?.ratio ?? null;
+    const acwrZone = acwrObj?.zone || (acwrRatio == null ? null : acwrRatio < 0.8 ? 'low' : acwrRatio > 1.3 ? 'red' : acwrRatio > 1.1 ? 'amber' : 'green');
+
+    return { plannedKm, completedKm, plannedMin, completedMin, acwr: acwrRatio, acwrZone };
+  }, [view, weekDates, workoutsByDate, monitoring]);
+
+  /* ─── Race date ─── */
+  const raceDate = plan?.race_date ? parseISO(plan.race_date) : null;
+
+  /* ─── Navigation ─── */
+  function goToday() { setCurrentDate(new Date()); }
+  function goRaceDay() { if (raceDate) setCurrentDate(raceDate); }
+  function goPrev() { setCurrentDate(d => view === 'week' ? subWeeks(d, 1) : subMonths(d, 1)); }
+  function goNext() { setCurrentDate(d => view === 'week' ? addWeeks(d, 1) : addMonths(d, 1)); }
+
+  /* ─── Coach edit ─── */
+  function startEdit(workout) {
+    setEditingWorkout(workout);
+    setEditForm({
+      title: workout.title || '',
+      workout_type: workout.workout_type || 'easy',
+      distance_km: workout.distance_km || '',
+      duration_minutes: workout.duration_minutes || '',
+      pace_range_min: workout.pace_range_min || '',
+      pace_range_max: workout.pace_range_max || '',
+      hr_zone: workout.hr_zone || '',
+      description: workout.description || '',
+      coach_notes: workout.coach_notes || '',
+    });
+  }
+
+  async function saveEdit() {
+    if (!editingWorkout) return;
+    setSaving(true);
+    try {
+      const data = { ...editForm };
+      if (data.distance_km) data.distance_km = parseFloat(data.distance_km);
+      if (data.duration_minutes) data.duration_minutes = parseInt(data.duration_minutes);
+      if (data.pace_range_min) data.pace_range_min = parseInt(data.pace_range_min);
+      if (data.pace_range_max) data.pace_range_max = parseInt(data.pace_range_max);
+      await api.updateWorkout(editingWorkout.id, data);
+      setEditingWorkout(null);
+      setSelectedWorkout(null);
+      await loadData();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function cancelEdit() { setEditingWorkout(null); }
+
+  /* ─── Render ─── */
+  if (loading) return <div className="text-volt font-display text-xl animate-pulse">LOADING CALENDAR...</div>;
+
+  const backUrl = paramAthleteId ? `/athletes/${paramAthleteId}` : '/my-plan';
+  const backLabel = paramAthleteId ? athlete?.profiles?.full_name || 'Back' : 'My Plan';
+
+  if (!plan) {
+    return (
+      <div>
+        <Link to={backUrl} className="flex items-center gap-2 text-smoke hover:text-volt text-sm uppercase tracking-wider mb-6">
+          <ArrowLeft size={16} /> {backLabel}
+        </Link>
+        <div className="card text-center py-12">
+          <p className="text-smoke text-lg uppercase">No training plan found</p>
+          {paramAthleteId && (
+            <Link to={`/athletes/${paramAthleteId}`} className="btn-primary mt-4 inline-block">GENERATE A PLAN</Link>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Back link */}
+      <Link to={backUrl} className="flex items-center gap-2 text-smoke hover:text-volt text-sm uppercase tracking-wider mb-6 transition-colors">
+        <ArrowLeft size={16} /> {backLabel}
+      </Link>
+
+      {/* ─── Navigation bar ─── */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+        <h1 className="font-display text-3xl text-volt">TRAINING CALENDAR</h1>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* View toggle */}
+          <div className="flex border border-ash">
+            <button
+              onClick={() => setView('week')}
+              className={`px-3 py-1.5 text-xs uppercase font-bold tracking-wider transition-colors ${view === 'week' ? 'bg-volt text-carbon' : 'text-smoke hover:text-white'}`}
+            >
+              <span className="flex items-center gap-1"><CalendarIcon size={14} /> Week</span>
+            </button>
+            <button
+              onClick={() => setView('month')}
+              className={`px-3 py-1.5 text-xs uppercase font-bold tracking-wider transition-colors ${view === 'month' ? 'bg-volt text-carbon' : 'text-smoke hover:text-white'}`}
+            >
+              <span className="flex items-center gap-1"><LayoutGrid size={14} /> Month</span>
+            </button>
+          </div>
+
+          {/* Navigation */}
+          <div className="flex items-center gap-1">
+            <button onClick={goPrev} className="p-2 border border-ash hover:border-volt text-smoke hover:text-volt transition-colors">
+              <ChevronLeft size={18} />
+            </button>
+            <button onClick={goToday} className="px-3 py-1.5 border border-ash hover:border-volt text-smoke hover:text-volt text-xs uppercase font-bold tracking-wider transition-colors">
+              Today
+            </button>
+            <button onClick={goNext} className="p-2 border border-ash hover:border-volt text-smoke hover:text-volt transition-colors">
+              <ChevronRight size={18} />
+            </button>
+          </div>
+
+          {raceDate && (
+            <button onClick={goRaceDay} className="px-3 py-1.5 border border-volt text-volt hover:bg-volt hover:text-carbon text-xs uppercase font-bold tracking-wider transition-colors flex items-center gap-1">
+              <Flag size={14} /> Race Day
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Period label + phase */}
+      <div className="flex flex-wrap items-center justify-between mb-4 px-1">
+        <div className="flex items-center gap-3">
+          <span className="font-display text-lg">
+            {view === 'week'
+              ? `${format(weekDates[0], 'MMM d')} — ${format(weekDates[6], 'MMM d, yyyy')}`
+              : format(currentDate, 'MMMM yyyy').toUpperCase()
+            }
+          </span>
+          {view === 'week' && currentWeekData?.phase && (
+            <span className="badge">{currentWeekData.phase.toUpperCase()}</span>
+          )}
+          {view === 'week' && currentWeekData && (
+            <span className="text-smoke text-sm">Week {currentWeekData.week_number}</span>
+          )}
+        </div>
+        {view === 'week' && currentWeekData?.total_km && (
+          <span className="text-volt font-display">{currentWeekData.total_km}KM PLAN</span>
+        )}
+      </div>
+
+      {/* ─── Week Summary Bar ─── */}
+      {view === 'week' && (
+        <div className="border border-ash bg-steel/30 p-4 mb-6">
+          <div className="flex flex-wrap items-center gap-6 text-sm">
+            <div>
+              <span className="text-smoke uppercase text-xs tracking-wider">Planned</span>
+              <span className="ml-2 font-semibold">{weekSummary.plannedKm.toFixed(1)} km</span>
+              <span className="text-smoke mx-1">|</span>
+              <span className="font-semibold">{Math.floor(weekSummary.plannedMin / 60)}h {weekSummary.plannedMin % 60}m</span>
+            </div>
+            <div>
+              <span className="text-smoke uppercase text-xs tracking-wider">Completed</span>
+              <span className="ml-2 text-green-400 font-semibold">{weekSummary.completedKm.toFixed(1)} km</span>
+              <span className="text-smoke mx-1">|</span>
+              <span className="text-green-400 font-semibold">{Math.floor(weekSummary.completedMin / 60)}h {weekSummary.completedMin % 60}m</span>
+            </div>
+            {weekSummary.acwr != null && (
+              <div>
+                <span className="text-smoke uppercase text-xs tracking-wider">ACWR</span>
+                <span className={`ml-2 font-bold ${
+                  weekSummary.acwrZone === 'green' ? 'text-green-400' :
+                  weekSummary.acwrZone === 'amber' ? 'text-yellow-400' :
+                  weekSummary.acwrZone === 'red' ? 'text-red-400' : 'text-blue-400'
+                }`}>
+                  {typeof weekSummary.acwr === 'number' ? weekSummary.acwr.toFixed(2) : weekSummary.acwr}
+                </span>
+              </div>
+            )}
+            {weekSummary.plannedKm > 0 && (
+              <div className="flex-1 min-w-[120px]">
+                <div className="w-full bg-ash h-2">
+                  <div
+                    className="bg-green-500 h-2 transition-all"
+                    style={{ width: `${Math.min(100, (weekSummary.completedKm / weekSummary.plannedKm) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Week View ─── */}
+      {view === 'week' && (
+        <div className="grid grid-cols-1 sm:grid-cols-7 gap-3 mb-6">
+          {weekDates.map((date, i) => {
+            const key = format(date, 'yyyy-MM-dd');
+            const workout = workoutsByDate[key];
+            const colors = workout ? getColors(workout.workout_type) : getColors('rest');
+            const today = isToday(date);
+            const isRace = raceDate && isSameDay(date, raceDate);
+
+            return (
+              <div
+                key={key}
+                onClick={() => workout && setSelectedWorkout(workout)}
+                className={`border-l-4 ${colors.border} ${colors.bg} p-4 min-h-[180px] cursor-pointer hover:bg-white/5 transition-colors
+                  ${today ? 'ring-2 ring-volt ring-inset' : ''}
+                  ${isRace ? 'ring-2 ring-volt' : ''}
+                `}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-smoke text-xs font-bold">{DAY_NAMES[i]}</span>
+                  <span className={`text-xs ${today ? 'text-volt font-bold' : 'text-smoke'}`}>
+                    {format(date, 'MMM d')}
+                  </span>
+                </div>
+
+                {workout ? (
+                  <>
+                    <p className={`text-xs font-bold uppercase ${colors.text}`}>
+                      {getColors(workout.workout_type).label}
+                    </p>
+                    <p className="text-white text-sm font-semibold mt-1 line-clamp-2">{workout.title}</p>
+
+                    {workout.distance_km > 0 && (
+                      <p className="text-volt text-lg font-display mt-2">{workout.distance_km}KM</p>
+                    )}
+                    {workout.pace_range_min && workout.pace_range_max && (
+                      <p className="text-smoke text-xs mt-1">
+                        {formatPace(workout.pace_range_min)}-{formatPace(workout.pace_range_max)}/km
+                      </p>
+                    )}
+                    {workout.duration_minutes > 0 && (
+                      <p className="text-smoke text-xs mt-1">{workout.duration_minutes} min</p>
+                    )}
+                    {workout.status === 'completed' && (
+                      <div className="flex items-center gap-1 mt-2">
+                        <Check size={12} className="text-green-400" />
+                        <span className="text-green-400 text-xs font-semibold">DONE</span>
+                      </div>
+                    )}
+                    {workout.status === 'skipped' && (
+                      <div className="flex items-center gap-1 mt-2">
+                        <X size={12} className="text-red-400" />
+                        <span className="text-red-400 text-xs font-semibold">SKIPPED</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-smoke/50 text-xs uppercase mt-4">Rest</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ─── Month View ─── */}
+      {view === 'month' && (
+        <>
+          {/* Day headers */}
+          <div className="grid grid-cols-7 gap-1 mb-1">
+            {DAY_NAMES.map(d => (
+              <div key={d} className="text-center text-smoke text-xs font-bold py-1">{d}</div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 mb-6">
+            {monthDays.map((date) => {
+              const key = format(date, 'yyyy-MM-dd');
+              const workout = workoutsByDate[key];
+              const inMonth = isSameMonth(date, currentDate);
+              const today = isToday(date);
+              const colors = workout ? getColors(workout.workout_type) : null;
+              const isRace = raceDate && isSameDay(date, raceDate);
+
+              return (
+                <div
+                  key={key}
+                  onClick={() => workout && setSelectedWorkout(workout)}
+                  className={`p-2 min-h-[90px] border border-ash/30 transition-colors
+                    ${inMonth ? 'bg-steel/20' : 'bg-carbon/50 opacity-40'}
+                    ${today ? 'ring-1 ring-volt ring-inset' : ''}
+                    ${workout ? 'cursor-pointer hover:bg-white/5' : ''}
+                  `}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-xs ${today ? 'text-volt font-bold' : 'text-smoke'}`}>
+                      {format(date, 'd')}
+                    </span>
+                    {isRace && <Flag size={10} className="text-volt" />}
+                  </div>
+
+                  {workout && workout.workout_type !== 'rest' && (
+                    <div className={`${colors.bg} border-l-2 ${colors.border} px-1.5 py-1 mt-1`}>
+                      <p className={`text-[10px] font-bold uppercase ${colors.text} truncate`}>
+                        {colors.label}
+                      </p>
+                      {workout.distance_km > 0 && (
+                        <p className="text-white text-[10px] font-semibold">{workout.distance_km}km</p>
+                      )}
+                      {workout.status === 'completed' && (
+                        <Check size={10} className="text-green-400 mt-0.5" />
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* ─── Workout Detail Panel ─── */}
+      {selectedWorkout && !editingWorkout && (
+        <WorkoutDetailPanel
+          workout={selectedWorkout}
+          isCoach={isCoach}
+          planStatus={plan?.status}
+          onClose={() => setSelectedWorkout(null)}
+          onEdit={() => startEdit(selectedWorkout)}
+          onFeedback={() => setFeedbackWorkout(selectedWorkout)}
+        />
+      )}
+
+      {/* ─── Coach Inline Edit ─── */}
+      {editingWorkout && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-display text-xl flex items-center gap-2">
+              <Edit3 size={18} className="text-volt" /> EDIT WORKOUT
+            </h2>
+            <button onClick={cancelEdit} className="text-smoke hover:text-white"><X size={20} /></button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+            <div>
+              <label className="text-smoke text-xs uppercase block mb-1">Title</label>
+              <input
+                value={editForm.title}
+                onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-smoke text-xs uppercase block mb-1">Type</label>
+              <select
+                value={editForm.workout_type}
+                onChange={e => setEditForm(f => ({ ...f, workout_type: e.target.value }))}
+                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none"
+              >
+                {Object.keys(WORKOUT_COLORS).map(t => (
+                  <option key={t} value={t}>{WORKOUT_COLORS[t].label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-smoke text-xs uppercase block mb-1">Distance (km)</label>
+              <input
+                type="number" step="0.1"
+                value={editForm.distance_km}
+                onChange={e => setEditForm(f => ({ ...f, distance_km: e.target.value }))}
+                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-smoke text-xs uppercase block mb-1">Duration (min)</label>
+              <input
+                type="number"
+                value={editForm.duration_minutes}
+                onChange={e => setEditForm(f => ({ ...f, duration_minutes: e.target.value }))}
+                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-smoke text-xs uppercase block mb-1">Pace Min (sec/km)</label>
+              <input
+                type="number"
+                value={editForm.pace_range_min}
+                onChange={e => setEditForm(f => ({ ...f, pace_range_min: e.target.value }))}
+                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-smoke text-xs uppercase block mb-1">Pace Max (sec/km)</label>
+              <input
+                type="number"
+                value={editForm.pace_range_max}
+                onChange={e => setEditForm(f => ({ ...f, pace_range_max: e.target.value }))}
+                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-smoke text-xs uppercase block mb-1">HR Zone</label>
+              <select
+                value={editForm.hr_zone}
+                onChange={e => setEditForm(f => ({ ...f, hr_zone: e.target.value }))}
+                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none"
+              >
+                <option value="">--</option>
+                {['Z1', 'Z2', 'Z3', 'Z4', 'Z5'].map(z => <option key={z} value={z}>{z}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="text-smoke text-xs uppercase block mb-1">Description</label>
+              <textarea
+                rows={3}
+                value={editForm.description}
+                onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none resize-none"
+              />
+            </div>
+            <div>
+              <label className="text-smoke text-xs uppercase block mb-1">Coach Notes</label>
+              <textarea
+                rows={3}
+                value={editForm.coach_notes}
+                onChange={e => setEditForm(f => ({ ...f, coach_notes: e.target.value }))}
+                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none resize-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button onClick={saveEdit} disabled={saving} className="btn-primary flex items-center gap-2">
+              <Save size={14} /> {saving ? 'SAVING...' : 'SAVE CHANGES'}
+            </button>
+            <button onClick={cancelEdit} className="px-4 py-2 border border-ash text-smoke hover:text-white text-sm uppercase font-bold tracking-wider transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Feedback Modal ─── */}
+      {feedbackWorkout && (
+        <WorkoutFeedbackModal
+          workout={feedbackWorkout}
+          onClose={() => setFeedbackWorkout(null)}
+          onSaved={() => {
+            setFeedbackWorkout(null);
+            loadData();
+          }}
+        />
+      )}
+
+      {/* ─── Week Overview Bar ─── */}
+      {plan?.plan_weeks?.length > 1 && (
+        <div className="flex gap-0.5 mt-4">
+          {plan.plan_weeks.map((w, i) => {
+            // Check if this plan week matches the currently displayed week
+            const isActive = currentWeekData?.week_number === w.week_number;
+            return (
+              <button
+                key={i}
+                onClick={() => {
+                  const firstWorkout = w.workouts?.[0];
+                  if (firstWorkout?.workout_date) {
+                    setCurrentDate(parseISO(firstWorkout.workout_date));
+                    setView('week');
+                  }
+                }}
+                className={`flex-1 h-2 transition-colors ${isActive ? 'bg-volt' : 'bg-ash hover:bg-smoke'}`}
+                title={`Week ${w.week_number} — ${w.phase}`}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════ */
+/*  Workout Detail Panel                          */
+/* ═══════════════════════════════════════════════ */
+
+function WorkoutDetailPanel({ workout, isCoach, planStatus, onClose, onEdit, onFeedback }) {
+  const colors = getColors(workout.workout_type);
+  const [feedback, setFeedback] = useState(null);
+
+  useEffect(() => {
+    if (workout.status === 'completed' && workout.id) {
+      api.getWorkoutFeedback(workout.id).then(setFeedback).catch(() => {});
+    }
+  }, [workout]);
+
+  return (
+    <div className="card mb-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <h2 className="font-display text-xl">{workout.title}</h2>
+          <span className={`text-xs font-bold uppercase px-2 py-0.5 ${colors.bg} ${colors.text} border ${colors.border}`}>
+            {colors.label}
+          </span>
+        </div>
+        <button onClick={onClose} className="text-smoke hover:text-white"><X size={20} /></button>
+      </div>
+
+      {/* Stats grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        <DetailItem label="Distance" value={workout.distance_km ? `${workout.distance_km} km` : '--'} />
+        <DetailItem label="Duration" value={workout.duration_minutes ? `${workout.duration_minutes} min` : '--'} />
+        <DetailItem label="HR Zone" value={workout.hr_zone || '--'} />
+        <DetailItem label="Target Pace" value={
+          workout.pace_range_min && workout.pace_range_max
+            ? `${formatPace(workout.pace_range_min)} - ${formatPace(workout.pace_range_max)}/km`
+            : '--'
+        } />
+      </div>
+
+      {/* Description */}
+      {workout.description && (
+        <div className="mb-4">
+          <p className="text-smoke text-xs uppercase mb-1">Description</p>
+          <p className="text-sm whitespace-pre-wrap">{workout.description}</p>
+        </div>
+      )}
+
+      {/* Intervals */}
+      {workout.intervals_detail && (
+        <div className="mb-4">
+          <p className="text-smoke text-xs uppercase mb-1">Intervals</p>
+          <p className="text-sm">
+            {workout.intervals_detail.reps}x{workout.intervals_detail.distance_m}m
+            @ {formatPace(workout.intervals_detail.pace_sec_km)}/km
+            | {workout.intervals_detail.rest_seconds}s {workout.intervals_detail.rest_type}
+          </p>
+        </div>
+      )}
+
+      {/* Coach notes */}
+      {workout.coach_notes && (
+        <div className="mb-4">
+          <p className="text-smoke text-xs uppercase mb-1">Coach Notes</p>
+          <p className="text-sm text-volt">{workout.coach_notes}</p>
+        </div>
+      )}
+
+      {/* Completed: plan vs actual */}
+      {workout.status === 'completed' && (
+        <div className="border-t border-ash pt-4 mt-4">
+          <h3 className="font-body font-bold uppercase tracking-wider text-sm mb-3 text-green-400">COMPLETED</h3>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <CompareItem
+              label="Distance"
+              planned={workout.distance_km ? `${workout.distance_km}km` : '--'}
+              actual={workout.actual_distance_km ? `${workout.actual_distance_km}km` : '--'}
+            />
+            <CompareItem
+              label="Duration"
+              planned={workout.duration_minutes ? `${workout.duration_minutes}m` : '--'}
+              actual={workout.actual_duration_minutes ? `${workout.actual_duration_minutes}m` : '--'}
+            />
+            <CompareItem
+              label="Avg Pace"
+              planned={formatPace(workout.pace_target_sec_km)}
+              actual={formatPace(workout.actual_avg_pace)}
+            />
+            <CompareItem
+              label="Avg HR"
+              planned={workout.hr_zone || '--'}
+              actual={workout.actual_avg_hr ? `${workout.actual_avg_hr}bpm` : '--'}
+            />
+          </div>
+
+          {/* Feedback */}
+          {feedback && (
+            <div className="mt-4 border-t border-ash pt-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {feedback.rpe && (
+                  <DetailItem label="RPE" value={`${feedback.rpe}/10`} />
+                )}
+                {feedback.feeling && (
+                  <DetailItem label="Feeling" value={feedback.feeling} />
+                )}
+              </div>
+              {feedback.notes && (
+                <div className="mt-2">
+                  <p className="text-smoke text-xs uppercase mb-1">Athlete Notes</p>
+                  <p className="text-sm">{feedback.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Athlete notes */}
+      {workout.athlete_notes && (
+        <div className="border-t border-ash pt-4 mt-4">
+          <p className="text-smoke text-xs uppercase mb-1">Athlete Notes</p>
+          <p className="text-sm">{workout.athlete_notes}</p>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex gap-3 mt-4 pt-4 border-t border-ash">
+        {isCoach && (
+          <button onClick={onEdit} className="btn-primary flex items-center gap-2 text-sm">
+            <Edit3 size={14} /> EDIT
+          </button>
+        )}
+        {!isCoach && workout.status === 'completed' && (
+          <button onClick={onFeedback} className="btn-primary flex items-center gap-2 text-sm">
+            <MessageSquare size={14} /> LOG FEEDBACK
+          </button>
+        )}
+        {!isCoach && workout.status === 'planned' && (
+          <button onClick={onFeedback} className="btn-primary flex items-center gap-2 text-sm">
+            <Check size={14} /> LOG WORKOUT
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DetailItem({ label, value }) {
+  return (
+    <div>
+      <p className="text-smoke text-xs uppercase">{label}</p>
+      <p className="font-semibold uppercase text-sm">{value}</p>
+    </div>
+  );
+}
+
+function CompareItem({ label, planned, actual }) {
+  return (
+    <div>
+      <p className="text-smoke text-xs uppercase mb-1">{label}</p>
+      <p className="text-sm"><span className="text-smoke">Plan:</span> {planned}</p>
+      <p className="text-sm"><span className="text-green-400">Actual:</span> {actual}</p>
+    </div>
+  );
+}

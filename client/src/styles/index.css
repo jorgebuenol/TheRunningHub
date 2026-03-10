@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-carbon text-white antialiased;
+    font-family: 'Barlow Condensed', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Anton', sans-serif;
+    @apply uppercase tracking-wide;
+  }
+
+  ::selection {
+    @apply bg-volt text-carbon;
+  }
+
+  ::-webkit-scrollbar {
+    @apply w-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-carbon;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-ash;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-smoke;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-volt text-carbon font-bold uppercase tracking-wider px-6 py-3
+           hover:bg-white transition-colors duration-150 text-sm;
+  }
+
+  .btn-secondary {
+    @apply border border-volt text-volt font-bold uppercase tracking-wider px-6 py-3
+           hover:bg-volt hover:text-carbon transition-colors duration-150 text-sm;
+  }
+
+  .btn-ghost {
+    @apply text-smoke font-semibold uppercase tracking-wider px-6 py-3
+           hover:text-white transition-colors duration-150 text-sm;
+  }
+
+  .input-field {
+    @apply w-full bg-steel border border-ash px-4 py-3 text-white
+           placeholder:text-smoke focus:border-volt focus:outline-none
+           font-body text-sm;
+  }
+
+  .card {
+    @apply bg-steel border border-ash p-6;
+  }
+
+  .label {
+    @apply block text-smoke uppercase tracking-wider text-xs font-semibold mb-1;
+  }
+
+  .stat-value {
+    @apply text-volt font-display text-3xl;
+  }
+
+  .badge {
+    @apply inline-block bg-volt text-carbon text-xs font-bold uppercase tracking-wider px-2 py-1;
+  }
+
+  .workout-easy { @apply border-l-4 border-green-500; }
+  .workout-tempo { @apply border-l-4 border-yellow-500; }
+  .workout-long { @apply border-l-4 border-blue-500; }
+  .workout-interval { @apply border-l-4 border-red-500; }
+  .workout-rest { @apply border-l-4 border-smoke; }
+  .workout-race { @apply border-l-4 border-volt; }
+}

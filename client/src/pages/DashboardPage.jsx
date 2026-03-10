@@ -1,0 +1,255 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { api } from '../lib/api';
+import Sparkline from '../components/ui/Sparkline';
+import { Users, Target, Calendar, TrendingUp, ChevronRight, Plus, Zap, AlertTriangle, Shield, Activity, UserX } from 'lucide-react';
+
+const ACWR_COLORS = { green: 'bg-green-400', amber: 'bg-yellow-400', red: 'bg-red-400' };
+
+export default function DashboardPage() {
+  const [dashboard, setDashboard] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    loadDashboard();
+  }, []);
+
+  async function loadDashboard() {
+    try {
+      const data = await api.getDashboard();
+      setDashboard(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return <div className="text-volt font-display text-xl animate-pulse">LOADING DASHBOARD...</div>;
+  }
+
+  if (error) {
+    return <div className="text-red-400">{error}</div>;
+  }
+
+  const athletes = dashboard?.athletes || [];
+  const withPlans = athletes.filter(a => a.active_plan);
+  const upcoming = athletes.filter(a => a.weeks_to_race && a.weeks_to_race <= 4);
+  const incompleteProfiles = athletes.filter(a => a.onboarding && !a.onboarding.isComplete);
+
+  // Flagged athletes: low readiness, high ACWR, or pain
+  const flagged = athletes.filter(a => {
+    const m = a.monitoring;
+    if (!m) return false;
+    return (m.readiness_score !== null && m.readiness_score < 2.5) ||
+           m.acwr_zone === 'red' ||
+           m.pain_flag;
+  });
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="font-display text-4xl text-volt">DASHBOARD</h1>
+          <p className="text-smoke uppercase tracking-wider text-sm mt-1">Coach Overview</p>
+        </div>
+        <Link to="/athletes/new" className="btn-primary flex items-center gap-2">
+          <Plus size={16} />
+          ADD ATHLETE
+        </Link>
+      </div>
+
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <StatCard icon={<Users size={20} />} value={athletes.length} label="Total Athletes" />
+        <StatCard icon={<Target size={20} />} value={withPlans.length} label="Active Plans" />
+        <StatCard icon={<Calendar size={20} />} value={upcoming.length} label="Race in 4 Weeks" />
+        {incompleteProfiles.length > 0 ? (
+          <StatCard icon={<UserX size={20} />} value={incompleteProfiles.length} label="Incomplete Profiles" warning />
+        ) : (
+          <StatCard
+            icon={<TrendingUp size={20} />}
+            value={athletes.reduce((sum, a) => sum + (a.workouts_this_week || 0), 0)}
+            label="Workouts This Week"
+          />
+        )}
+      </div>
+
+      {/* Flagged Athletes */}
+      {flagged.length > 0 && (
+        <div className="mb-8">
+          <h2 className="font-display text-xl mb-3 flex items-center gap-2">
+            <AlertTriangle size={18} className="text-red-400" />
+            FLAGGED ATHLETES
+          </h2>
+          <div className="space-y-2">
+            {flagged.map(a => (
+              <Link
+                key={a.id}
+                to={`/athletes/${a.id}/monitoring`}
+                className="flex items-center justify-between px-4 py-3 border border-red-500/30 bg-red-900/10 hover:border-red-500 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <AlertTriangle size={16} className="text-red-400" />
+                  <span className="font-semibold uppercase text-sm">{a.name}</span>
+                </div>
+                <div className="flex items-center gap-4 text-xs">
+                  {a.monitoring?.readiness_score !== null && a.monitoring.readiness_score < 2.5 && (
+                    <span className="text-red-400">Readiness: {a.monitoring.readiness_score}</span>
+                  )}
+                  {a.monitoring?.acwr_zone === 'red' && (
+                    <span className="text-red-400">ACWR: {a.monitoring.acwr_ratio}</span>
+                  )}
+                  {a.monitoring?.pain_flag && (
+                    <span className="text-red-400">Pain: {a.monitoring.pain_location}</span>
+                  )}
+                  <ChevronRight size={14} className="text-smoke" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Athletes Grid */}
+      <div className="mb-4">
+        <h2 className="font-display text-2xl mb-4">ATHLETES</h2>
+      </div>
+
+      {athletes.length === 0 ? (
+        <div className="card text-center py-12">
+          <Zap size={40} className="text-volt mx-auto mb-4" />
+          <p className="text-smoke text-lg uppercase tracking-wider">No athletes yet</p>
+          <Link to="/athletes/new" className="btn-primary mt-4 inline-block">
+            ADD FIRST ATHLETE
+          </Link>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {athletes.map(athlete => (
+            <AthleteCard key={athlete.id} athlete={athlete} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatCard({ icon, value, label, warning }) {
+  return (
+    <div className="card">
+      <div className="flex items-center gap-3 mb-2">
+        <div className={warning ? 'text-yellow-400' : 'text-volt'}>{icon}</div>
+      </div>
+      <p className={warning ? 'text-yellow-400 font-display text-3xl' : 'stat-value'}>{value}</p>
+      <p className="text-smoke text-xs uppercase tracking-wider mt-1">{label}</p>
+    </div>
+  );
+}
+
+function AthleteCard({ athlete }) {
+  const weeksLabel = athlete.weeks_to_race != null
+    ? `${athlete.weeks_to_race}W`
+    : '--';
+
+  const statusColor = athlete.active_plan
+    ? 'text-green-400'
+    : 'text-yellow-400';
+
+  const m = athlete.monitoring;
+
+  // Readiness color
+  const readinessColor = m?.readiness_score >= 3.5 ? 'text-green-400 bg-green-500/20' :
+                          m?.readiness_score >= 2.5 ? 'text-yellow-400 bg-yellow-500/20' :
+                          m?.readiness_score ? 'text-red-400 bg-red-500/20' : null;
+
+  return (
+    <Link to={`/athletes/${athlete.id}`} className="card hover:border-volt transition-colors group">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h3 className="font-body font-bold text-lg uppercase">{athlete.name}</h3>
+          <p className="text-smoke text-xs">{athlete.email}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Monitoring indicators */}
+          {m?.pain_flag && (
+            <span title="Pain flag active" className="text-red-400">
+              <AlertTriangle size={14} />
+            </span>
+          )}
+          {m?.acwr_zone && (
+            <span title={`ACWR: ${m.acwr_ratio}`} className={`w-2.5 h-2.5 rounded-full ${ACWR_COLORS[m.acwr_zone]}`} />
+          )}
+          <ChevronRight size={20} className="text-smoke group-hover:text-volt transition-colors" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <div>
+          <p className="text-smoke text-xs uppercase">Goal</p>
+          <p className="text-white font-semibold text-sm">{athlete.goal_race || '--'}</p>
+        </div>
+        <div>
+          <p className="text-smoke text-xs uppercase">Race In</p>
+          <p className="text-volt font-bold text-sm">{weeksLabel}</p>
+        </div>
+        <div>
+          <p className="text-smoke text-xs uppercase">VO2max</p>
+          <p className="text-white font-semibold text-sm">{athlete.vdot || '--'}</p>
+        </div>
+      </div>
+
+      {/* Monitoring row */}
+      {m && (m.readiness_score || m.avg_rpe || m.rpe_sparkline?.length > 0) && (
+        <div className="flex items-center gap-3 mb-3 py-2 border-t border-b border-ash">
+          {readinessColor && (
+            <div className="flex items-center gap-1.5">
+              <Activity size={12} className="text-smoke" />
+              <span className={`text-xs font-bold px-1.5 py-0.5 ${readinessColor}`}>
+                {m.readiness_score}
+              </span>
+            </div>
+          )}
+          {m.avg_rpe && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-smoke text-[10px] uppercase">RPE</span>
+              <span className={`text-xs font-bold ${m.avg_rpe <= 6 ? 'text-green-400' : 'text-orange-400'}`}>
+                {m.avg_rpe}
+              </span>
+            </div>
+          )}
+          {m.rpe_sparkline?.length > 1 && (
+            <Sparkline data={m.rpe_sparkline} width={60} height={18} color="#FF6B6B" />
+          )}
+        </div>
+      )}
+
+      {/* Onboarding progress */}
+      {athlete.onboarding && !athlete.onboarding.isComplete && (
+        <div className="mb-3 py-2 border-t border-ash">
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-yellow-400 font-semibold uppercase">Profile {athlete.onboarding.percent}%</span>
+            <span className="text-smoke">{athlete.onboarding.completed}/{athlete.onboarding.total}</span>
+          </div>
+          <div className="w-full h-1.5 bg-ash">
+            <div className="h-full bg-yellow-400 transition-all" style={{ width: `${athlete.onboarding.percent}%` }} />
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between pt-3 border-t border-ash">
+        <span className={`text-xs font-semibold uppercase ${statusColor}`}>
+          {athlete.active_plan ? 'PLAN ACTIVE' : 'NO PLAN'}
+        </span>
+        {athlete.last_activity && (
+          <span className="text-smoke text-xs">
+            Last: {athlete.last_activity.workout_date}
+          </span>
+        )}
+      </div>
+    </Link>
+  );
+}
