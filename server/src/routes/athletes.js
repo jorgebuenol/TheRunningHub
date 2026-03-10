@@ -16,15 +16,7 @@ athleteRoutes.get('/me', async (req, res, next) => {
 
     if (error || !data) {
       // Auto-create athlete record for self-signed-up users
-      const { data: profile } = await req.supabase
-        .from('profiles')
-        .select('full_name, email')
-        .eq('id', req.user.id)
-        .single();
-
-      if (!profile) {
-        return res.status(404).json({ message: 'Athlete profile not found. Please contact your coach.' });
-      }
+      console.log('Auto-create athlete for user:', req.user.id, 'profile exists:', !!req.profile);
 
       const { data: newAthlete, error: insertErr } = await req.supabase
         .from('athletes')
@@ -33,9 +25,11 @@ athleteRoutes.get('/me', async (req, res, next) => {
         .single();
 
       if (insertErr) {
-        return res.status(404).json({ message: 'Could not create athlete profile.' });
+        console.error('Auto-create athlete insert failed:', insertErr);
+        return res.status(500).json({ message: 'Could not create athlete profile.', detail: insertErr.message });
       }
 
+      console.log('Auto-created athlete:', newAthlete.id);
       return res.json(newAthlete);
     }
 
