@@ -125,16 +125,13 @@ export default function MyProfilePage() {
   }
 
   function updateJsonbField(column, key, value) {
-    setAthlete(prev => ({
-      ...prev,
-      [column]: { ...(prev[column] || {}), [key]: value },
-    }));
-    // Always send the complete JSONB object
-    pendingUpdatesRef.current[column] = {
-      ...(athlete?.[column] || {}),
-      ...(pendingUpdatesRef.current[column] || {}),
-      [key]: value,
-    };
+    setAthlete(prev => {
+      // Build the complete updated JSONB column from latest state
+      const updatedColumn = { ...(prev[column] || {}), [key]: value };
+      // Always send the complete JSONB object to the server
+      pendingUpdatesRef.current[column] = updatedColumn;
+      return { ...prev, [column]: updatedColumn };
+    });
     scheduleSave();
   }
 
@@ -151,7 +148,15 @@ export default function MyProfilePage() {
     setSaving(true);
     try {
       const updated = await api.updateAthlete(athlete.id, updates);
-      setAthlete(updated);
+      // Merge server response with any new pending changes that arrived during the save
+      // so we never overwrite what the user is currently typing
+      setAthlete(() => {
+        const merged = { ...updated };
+        for (const [key, val] of Object.entries(pendingUpdatesRef.current)) {
+          merged[key] = val;
+        }
+        return merged;
+      });
       setLastSaved(new Date());
     } catch (err) {
       console.error('Auto-save failed:', err);
@@ -423,49 +428,98 @@ function NumericInput({ value, onChange, ...props }) {
   );
 }
 
+function StableTextInput({ value, onChange, ...props }) {
+  const [display, setDisplay] = useState(value || '');
+  const focused = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current) {
+      setDisplay(value || '');
+    }
+  }, [value]);
+
+  return (
+    <input
+      type="text"
+      {...props}
+      value={display}
+      onFocus={() => { focused.current = true; }}
+      onChange={e => {
+        setDisplay(e.target.value);
+        onChange(e.target.value || null);
+      }}
+      onBlur={() => { focused.current = false; }}
+    />
+  );
+}
+
+function StableTextarea({ value, onChange, ...props }) {
+  const [display, setDisplay] = useState(value || '');
+  const focused = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current) {
+      setDisplay(value || '');
+    }
+  }, [value]);
+
+  return (
+    <textarea
+      {...props}
+      value={display}
+      onFocus={() => { focused.current = true; }}
+      onChange={e => {
+        setDisplay(e.target.value);
+        onChange(e.target.value);
+      }}
+      onBlur={() => { focused.current = false; }}
+    />
+  );
+}
+
 function PersonalDataFields({ athlete, updateField }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div>
         <FieldLabel required>Age</FieldLabel>
-        <input
+        <NumericInput
           type="number"
           className="input-field"
           placeholder="e.g. 28"
-          value={athlete.age || ''}
-          onChange={e => updateField('age', e.target.value ? parseInt(e.target.value) : null)}
+          value={athlete.age}
+          onChange={val => { if (val !== undefined) updateField('age', val !== null ? Math.round(val) : null); }}
         />
       </div>
       <div>
         <FieldLabel required>Weight (kg)</FieldLabel>
-        <input
+        <NumericInput
           type="number"
           step="0.1"
           className="input-field"
           placeholder="e.g. 65"
-          value={athlete.weight_kg || ''}
-          onChange={e => updateField('weight_kg', e.target.value ? parseFloat(e.target.value) : null)}
+          value={athlete.weight_kg}
+          onChange={val => { if (val !== undefined) updateField('weight_kg', val); }}
         />
       </div>
       <div>
         <FieldLabel required>Height (cm)</FieldLabel>
-        <input
+        <NumericInput
           type="number"
           className="input-field"
           placeholder="e.g. 170"
-          value={athlete.height_cm || ''}
-          onChange={e => updateField('height_cm', e.target.value ? parseFloat(e.target.value) : null)}
+          value={athlete.height_cm}
+          onChange={val => { if (val !== undefined) updateField('height_cm', val !== null ? Math.round(val) : null); }}
         />
       </div>
       <div>
         <FieldLabel>Body Fat %</FieldLabel>
-        <input
+        <NumericInput
           type="number"
           step="0.1"
           className="input-field"
           placeholder="e.g. 18"
-          value={athlete.body_fat_pct || ''}
-          onChange={e => updateField('body_fat_pct', e.target.value ? parseFloat(e.target.value) : null)}
+          value={athlete.body_fat_pct}
+          onChange={val => { if (val !== undefined) updateField('body_fat_pct', val); }}
         />
       </div>
     </div>
@@ -549,15 +603,10 @@ function GoalFields({ athlete, updateField }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <FieldLabel required>Target Time</FieldLabel>
-          <input
-            type="text"
-            className="input-field"
+          <TimeInput
+            value={athlete.goal_time_seconds}
+            onChange={seconds => updateField('goal_time_seconds', seconds)}
             placeholder="H:MM:SS"
-            defaultValue={athlete.goal_time_seconds ? formatTime(athlete.goal_time_seconds) : ''}
-            onBlur={e => {
-              const seconds = parseTime(e.target.value);
-              if (seconds) updateField('goal_time_seconds', seconds);
-            }}
           />
         </div>
         <div>
@@ -623,11 +672,11 @@ function HealthFields({ athlete, updateField }) {
   return (
     <div>
       <FieldLabel>Injuries or Limitations</FieldLabel>
-      <textarea
+      <StableTextarea
         className="input-field h-28"
         placeholder="Describe any current or past injuries, limitations, or health conditions..."
-        value={athlete.injuries || ''}
-        onChange={e => updateField('injuries', e.target.value)}
+        value={athlete.injuries}
+        onChange={val => updateField('injuries', val || null)}
       />
       <p className="text-smoke text-xs mt-1">Leave blank if none. This section is optional.</p>
     </div>
@@ -640,15 +689,15 @@ function SleepFields({ athlete, updateJsonbField }) {
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div>
         <FieldLabel required>Average Hours per Night</FieldLabel>
-        <input
+        <NumericInput
           type="number"
           step="0.5"
           min="0"
           max="24"
           className="input-field"
           placeholder="e.g. 7.5"
-          value={data.avg_hours ?? ''}
-          onChange={e => updateJsonbField('sleep_data', 'avg_hours', e.target.value ? parseFloat(e.target.value) : null)}
+          value={data.avg_hours}
+          onChange={val => { if (val !== undefined) updateJsonbField('sleep_data', 'avg_hours', val); }}
         />
       </div>
       <div>
@@ -701,33 +750,33 @@ function NutritionFields({ athlete, updateJsonbField }) {
         </div>
         <div>
           <FieldLabel required>Daily Hydration (liters)</FieldLabel>
-          <input
+          <NumericInput
             type="number"
             step="0.1"
             min="0"
             className="input-field"
             placeholder="e.g. 2.5"
-            value={data.hydration_liters ?? ''}
-            onChange={e => updateJsonbField('nutrition_data', 'hydration_liters', e.target.value ? parseFloat(e.target.value) : null)}
+            value={data.hydration_liters}
+            onChange={val => { if (val !== undefined) updateJsonbField('nutrition_data', 'hydration_liters', val); }}
           />
         </div>
       </div>
       <div>
         <FieldLabel>Pre-Run Nutrition</FieldLabel>
-        <textarea
+        <StableTextarea
           className="input-field h-20"
           placeholder="What do you eat before running?"
-          value={data.pre_run_nutrition || ''}
-          onChange={e => updateJsonbField('nutrition_data', 'pre_run_nutrition', e.target.value)}
+          value={data.pre_run_nutrition}
+          onChange={val => updateJsonbField('nutrition_data', 'pre_run_nutrition', val)}
         />
       </div>
       <div>
         <FieldLabel>Post-Run Nutrition</FieldLabel>
-        <textarea
+        <StableTextarea
           className="input-field h-20"
           placeholder="What do you eat/drink after running?"
-          value={data.post_run_nutrition || ''}
-          onChange={e => updateJsonbField('nutrition_data', 'post_run_nutrition', e.target.value)}
+          value={data.post_run_nutrition}
+          onChange={val => updateJsonbField('nutrition_data', 'post_run_nutrition', val)}
         />
       </div>
     </div>
@@ -766,13 +815,13 @@ function WorkLifeFields({ athlete, updateJsonbField }) {
       </div>
       <div className="col-span-2">
         <FieldLabel>Daily Commute (minutes)</FieldLabel>
-        <input
+        <NumericInput
           type="number"
           min="0"
           className="input-field"
           placeholder="e.g. 30"
-          value={data.commute_minutes ?? ''}
-          onChange={e => updateJsonbField('work_life_data', 'commute_minutes', e.target.value ? parseInt(e.target.value) : null)}
+          value={data.commute_minutes}
+          onChange={val => { if (val !== undefined) updateJsonbField('work_life_data', 'commute_minutes', val !== null ? Math.round(val) : null); }}
         />
       </div>
     </div>
@@ -805,11 +854,11 @@ function RecoveryFields({ athlete, updateJsonbField, toggleRecoveryMethod }) {
       </div>
       <div>
         <FieldLabel>Rest Day Activities</FieldLabel>
-        <textarea
+        <StableTextarea
           className="input-field h-20"
           placeholder="What do you do on rest days? Walking, swimming, etc."
-          value={data.rest_day_activities || ''}
-          onChange={e => updateJsonbField('recovery_data', 'rest_day_activities', e.target.value)}
+          value={data.rest_day_activities}
+          onChange={val => updateJsonbField('recovery_data', 'rest_day_activities', val)}
         />
       </div>
     </div>
@@ -836,37 +885,37 @@ function CurrentTrainingFields({ athlete, updateJsonbField }) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <FieldLabel required>Experience (years)</FieldLabel>
-          <input
+          <NumericInput
             type="number"
             min="0"
             className="input-field"
             placeholder="e.g. 3"
-            value={data.experience_years ?? ''}
-            onChange={e => updateJsonbField('current_training_data', 'experience_years', e.target.value ? parseInt(e.target.value) : null)}
+            value={data.experience_years}
+            onChange={val => { if (val !== undefined) updateJsonbField('current_training_data', 'experience_years', val !== null ? Math.round(val) : null); }}
           />
         </div>
         <div>
           <FieldLabel required>Longest Run (km)</FieldLabel>
-          <input
+          <NumericInput
             type="number"
             step="0.1"
             min="0"
             className="input-field"
             placeholder="e.g. 21"
-            value={data.longest_run_km ?? ''}
-            onChange={e => updateJsonbField('current_training_data', 'longest_run_km', e.target.value ? parseFloat(e.target.value) : null)}
+            value={data.longest_run_km}
+            onChange={val => { if (val !== undefined) updateJsonbField('current_training_data', 'longest_run_km', val); }}
           />
         </div>
         <div>
           <FieldLabel>Runs / Week</FieldLabel>
-          <input
+          <NumericInput
             type="number"
             min="0"
             max="14"
             className="input-field"
             placeholder="e.g. 4"
-            value={data.runs_per_week ?? ''}
-            onChange={e => updateJsonbField('current_training_data', 'runs_per_week', e.target.value ? parseInt(e.target.value) : null)}
+            value={data.runs_per_week}
+            onChange={val => { if (val !== undefined) updateJsonbField('current_training_data', 'runs_per_week', val !== null ? Math.round(val) : null); }}
           />
         </div>
       </div>
@@ -879,33 +928,30 @@ function TechnologyFields({ athlete, updateField }) {
     <div className="space-y-4">
       <div>
         <FieldLabel>GPS Watch Model</FieldLabel>
-        <input
-          type="text"
+        <StableTextInput
           className="input-field"
           placeholder="e.g. Garmin Forerunner 255"
-          value={athlete.gps_watch_model || ''}
-          onChange={e => updateField('gps_watch_model', e.target.value)}
+          value={athlete.gps_watch_model}
+          onChange={val => updateField('gps_watch_model', val)}
         />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <FieldLabel>Intervals.icu API Key</FieldLabel>
-          <input
-            type="text"
+          <StableTextInput
             className="input-field"
             placeholder="Optional"
-            value={athlete.intervals_icu_api_key || ''}
-            onChange={e => updateField('intervals_icu_api_key', e.target.value)}
+            value={athlete.intervals_icu_api_key}
+            onChange={val => updateField('intervals_icu_api_key', val)}
           />
         </div>
         <div>
           <FieldLabel>Intervals.icu Athlete ID</FieldLabel>
-          <input
-            type="text"
+          <StableTextInput
             className="input-field"
             placeholder="Optional"
-            value={athlete.intervals_icu_athlete_id || ''}
-            onChange={e => updateField('intervals_icu_athlete_id', e.target.value)}
+            value={athlete.intervals_icu_athlete_id}
+            onChange={val => updateField('intervals_icu_athlete_id', val)}
           />
         </div>
       </div>
