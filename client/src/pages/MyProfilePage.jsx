@@ -359,6 +359,70 @@ function FieldLabel({ children, required }) {
   );
 }
 
+// ─── Stable Input Components ────────────────────────────────────────────────
+// Defined at module level so React never unmounts/remounts them on parent re-renders.
+// Each manages its own display string; syncs from parent only when NOT focused,
+// preventing the auto-save server response from clobbering mid-typing input.
+
+function TimeInput({ value, onChange, placeholder }) {
+  const [display, setDisplay] = useState(value ? formatTime(value) : '');
+  const focused = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current) {
+      setDisplay(value ? formatTime(value) : '');
+    }
+  }, [value]);
+
+  return (
+    <input
+      type="text"
+      className="input-field"
+      placeholder={placeholder || 'MM:SS'}
+      value={display}
+      onFocus={() => { focused.current = true; }}
+      onChange={e => setDisplay(e.target.value)}
+      onBlur={e => {
+        focused.current = false;
+        const seconds = parseTime(e.target.value);
+        onChange(seconds || null);
+        setDisplay(seconds ? formatTime(seconds) : e.target.value);
+      }}
+    />
+  );
+}
+
+function NumericInput({ value, onChange, ...props }) {
+  const [display, setDisplay] = useState(value ?? '');
+  const focused = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current) {
+      setDisplay(value ?? '');
+    }
+  }, [value]);
+
+  return (
+    <input
+      {...props}
+      value={display}
+      onFocus={() => { focused.current = true; }}
+      onChange={e => {
+        setDisplay(e.target.value);
+        const num = parseFloat(e.target.value);
+        onChange(e.target.value === '' ? null : isNaN(num) ? undefined : num);
+      }}
+      onBlur={() => {
+        focused.current = false;
+        const num = display !== '' ? parseFloat(display) : null;
+        const cleaned = num !== null && !isNaN(num) ? num : null;
+        onChange(cleaned);
+        setDisplay(cleaned ?? '');
+      }}
+    />
+  );
+}
+
 function PersonalDataFields({ athlete, updateField }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -409,22 +473,17 @@ function PersonalDataFields({ athlete, updateField }) {
 }
 
 function RunningHistoryFields({ athlete, updateField, vdot, paces }) {
-  function handleTimeChange(field, value) {
-    const seconds = parseTime(value);
-    updateField(field, seconds || null);
-  }
-
   return (
     <div className="space-y-4">
       <div>
         <FieldLabel required>Weekly KM</FieldLabel>
-        <input
+        <NumericInput
           type="number"
           step="0.1"
           className="input-field"
           placeholder="e.g. 35"
-          value={athlete.weekly_km || ''}
-          onChange={e => updateField('weekly_km', e.target.value ? parseFloat(e.target.value) : null)}
+          value={athlete.weekly_km}
+          onChange={val => { if (val !== undefined) updateField('weekly_km', val); }}
         />
       </div>
       <p className="text-smoke text-xs uppercase tracking-wider">Race Times (enter at least one)</p>
@@ -437,16 +496,10 @@ function RunningHistoryFields({ athlete, updateField, vdot, paces }) {
         ].map(({ field, label }) => (
           <div key={field}>
             <FieldLabel>{label}</FieldLabel>
-            <input
-              type="text"
-              className="input-field"
+            <TimeInput
+              value={athlete[field]}
+              onChange={seconds => updateField(field, seconds)}
               placeholder="MM:SS"
-              value={athlete[field] ? formatTime(athlete[field]) : ''}
-              onBlur={e => handleTimeChange(field, e.target.value)}
-              onChange={e => {
-                // Allow free typing, parse on blur
-              }}
-              defaultValue={athlete[field] ? formatTime(athlete[field]) : ''}
             />
           </div>
         ))}
