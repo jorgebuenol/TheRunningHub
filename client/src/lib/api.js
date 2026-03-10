@@ -38,6 +38,7 @@ export const api = {
   // Training Plans
   generatePlan: (athleteId) => request(`/api/plans/generate/${athleteId}`, { method: 'POST' }),
   getPlan: (planId) => request(`/api/plans/${planId}`),
+  generateWeekDetail: (planId, weekId) => request(`/api/plans/${planId}/weeks/${weekId}/generate`, { method: 'POST' }),
   getAthletePlans: (athleteId) => request(`/api/plans/athlete/${athleteId}`),
   updateWorkout: (workoutId, data) => request(`/api/workouts/${workoutId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   getWorkoutsInRange: (athleteId, start, end) => request(`/api/workouts/range/${athleteId}?start=${start}&end=${end}`),

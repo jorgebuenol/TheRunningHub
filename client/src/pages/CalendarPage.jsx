@@ -111,6 +111,8 @@ export default function CalendarPage() {
     const firstDay = format(weekDates[0], 'yyyy-MM-dd');
     // Find the plan week that contains the first day of the displayed week
     for (const w of plan.plan_weeks) {
+      // Match by workout dates (generated weeks) or start_date (skeleton weeks)
+      if (w.start_date === firstDay) return w;
       for (const wo of w.workouts || []) {
         if (wo.workout_date === firstDay) return w;
       }
@@ -295,8 +297,19 @@ export default function CalendarPage() {
         )}
       </div>
 
+      {/* ─── Skeleton Week Banner ─── */}
+      {view === 'week' && currentWeekData && !currentWeekData.is_generated && (
+        <div className="border-2 border-dashed border-ash/50 p-6 mb-6 text-center">
+          <h3 className="font-display text-lg text-volt mb-1">
+            WEEK {currentWeekData.week_number} — {(currentWeekData.phase || '').toUpperCase()} PHASE
+          </h3>
+          <p className="text-volt font-display text-2xl mb-2">{currentWeekData.km_target || '—'}KM TARGET</p>
+          <p className="text-smoke text-sm">Workouts have not been generated for this week yet.</p>
+        </div>
+      )}
+
       {/* ─── Week Summary Bar ─── */}
-      {view === 'week' && (
+      {view === 'week' && (!currentWeekData || currentWeekData.is_generated) && (
         <div className="border border-ash bg-steel/30 p-3 sm:p-4 mb-6">
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-3 sm:gap-6 text-sm">
             <div>
@@ -598,18 +611,27 @@ export default function CalendarPage() {
           {plan.plan_weeks.map((w, i) => {
             // Check if this plan week matches the currently displayed week
             const isActive = currentWeekData?.week_number === w.week_number;
+            const isSkeleton = !w.is_generated;
             return (
               <button
                 key={i}
                 onClick={() => {
-                  const firstWorkout = w.workouts?.[0];
-                  if (firstWorkout?.workout_date) {
-                    setCurrentDate(parseISO(firstWorkout.workout_date));
+                  // Use start_date for skeleton weeks, workout date for generated
+                  if (w.start_date) {
+                    setCurrentDate(parseISO(w.start_date));
                     setView('week');
+                  } else {
+                    const firstWorkout = w.workouts?.[0];
+                    if (firstWorkout?.workout_date) {
+                      setCurrentDate(parseISO(firstWorkout.workout_date));
+                      setView('week');
+                    }
                   }
                 }}
-                className={`flex-1 h-2 transition-colors ${isActive ? 'bg-volt' : 'bg-ash hover:bg-smoke'}`}
-                title={`Week ${w.week_number} — ${w.phase}`}
+                className={`flex-1 h-2 transition-colors ${
+                  isActive ? 'bg-volt' : isSkeleton ? 'bg-ash/30 hover:bg-ash/60' : 'bg-ash hover:bg-smoke'
+                }`}
+                title={`Week ${w.week_number} — ${w.phase}${isSkeleton ? ' (not generated)' : ''}`}
               />
             );
           })}

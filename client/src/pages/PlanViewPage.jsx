@@ -6,7 +6,7 @@ import { formatPace, formatTime } from '../lib/vdot';
 import {
   ArrowLeft, Calendar, Edit3, Save, X, Check,
   Bot, Send, Loader, MessageSquare, ChevronDown, ChevronRight,
-  Shield, History, Undo2,
+  Shield, History, Undo2, Zap,
 } from 'lucide-react';
 
 const WORKOUT_COLORS = {
@@ -27,6 +27,21 @@ const PHASE_LABELS = {
   peak: 'PEAK TRAINING',
   taper: 'TAPER',
   race: 'RACE WEEK',
+};
+
+const PHASE_COLORS = {
+  base: 'border-green-500 bg-green-500',
+  build: 'border-yellow-500 bg-yellow-500',
+  peak: 'border-red-500 bg-red-500',
+  taper: 'border-blue-500 bg-blue-500',
+  race: 'border-volt bg-volt',
+};
+
+const INTENSITY_STYLES = {
+  easy: 'bg-green-500/20 text-green-400 border-green-500',
+  moderate: 'bg-yellow-500/20 text-yellow-400 border-yellow-500',
+  hard: 'bg-red-500/20 text-red-400 border-red-500',
+  recovery: 'bg-blue-500/20 text-blue-400 border-blue-500',
 };
 
 const DAY_NAMES = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
@@ -53,6 +68,10 @@ export default function PlanViewPage() {
   const [approving, setApproving] = useState(false);
   const [unpublishing, setUnpublishing] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
+
+  // Week generation
+  const [generatingWeek, setGeneratingWeek] = useState(null);
+  const [generateError, setGenerateError] = useState('');
 
   // AI Chat
   const [chatOpen, setChatOpen] = useState(false);
@@ -94,6 +113,20 @@ export default function PlanViewPage() {
       setShowVersions(true);
     } catch (err) {
       console.error(err);
+    }
+  }
+
+  // Generate weekly detail
+  async function handleGenerateWeek(weekId) {
+    setGeneratingWeek(weekId);
+    setGenerateError('');
+    try {
+      const updated = await api.generateWeekDetail(planId, weekId);
+      setPlan(updated);
+    } catch (err) {
+      setGenerateError(err.message);
+    } finally {
+      setGeneratingWeek(null);
     }
   }
 
@@ -229,6 +262,10 @@ export default function PlanViewPage() {
   const isApproved = plan.status === 'approved';
   const canEdit = isCoach && isDraft;
 
+  const weeks = plan.plan_weeks || [];
+  const generatedCount = weeks.filter(w => w.is_generated).length;
+  const ungeneratedCount = weeks.filter(w => !w.is_generated).length;
+
   return (
     <div className="flex gap-0">
       {/* Main plan area */}
@@ -337,6 +374,57 @@ export default function PlanViewPage() {
           </div>
         )}
 
+        {/* ─── Plan Timeline Bar ─── */}
+        {weeks.length > 1 && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-display text-sm tracking-wider text-smoke">PLAN TIMELINE</h3>
+              <span className="text-smoke text-xs">
+                {generatedCount}/{weeks.length} weeks generated
+              </span>
+            </div>
+            <div className="flex gap-0.5 overflow-x-auto pb-2">
+              {weeks.map((week) => {
+                const phaseColor = PHASE_COLORS[week.phase] || PHASE_COLORS.base;
+                return (
+                  <a
+                    key={week.id}
+                    href={`#week-${week.week_number}`}
+                    className={`flex-shrink-0 w-14 border-t-4 ${phaseColor.split(' ')[0]} bg-steel/40 p-1.5 hover:bg-steel/80 transition-colors ${
+                      !week.is_generated ? 'opacity-50' : ''
+                    }`}
+                    title={`Week ${week.week_number} — ${week.phase} — ${week.km_target || 0}km`}
+                  >
+                    <p className="text-[10px] text-smoke font-bold">W{week.week_number}</p>
+                    <p className="text-[10px] text-white font-semibold">{week.km_target || '—'}km</p>
+                    <p className="text-[8px] text-smoke uppercase truncate">{week.phase}</p>
+                    {week.is_generated && (
+                      <Check size={8} className="text-green-400 mt-0.5" />
+                    )}
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Warning banner for un-generated weeks */}
+        {isDraft && ungeneratedCount > 0 && generatedCount > 0 && (
+          <div className="border border-yellow-500/50 bg-yellow-500/10 px-4 py-3 mb-6 text-sm text-yellow-300">
+            {ungeneratedCount} of {weeks.length} weeks have not been generated yet. Generate each week when ready, or approve the plan as-is.
+          </div>
+        )}
+
+        {/* Generate error */}
+        {generateError && (
+          <div className="border border-red-500 bg-red-900/20 px-4 py-3 mb-4 text-sm text-red-300">
+            {generateError}
+            <button onClick={() => setGenerateError('')} className="ml-3 text-red-400 hover:text-white">
+              <X size={14} className="inline" />
+            </button>
+          </div>
+        )}
+
         {/* Phase legend */}
         <div className="flex flex-wrap gap-3 mb-6">
           {Object.entries(WORKOUT_COLORS).map(([type, cls]) => (
@@ -348,8 +436,9 @@ export default function PlanViewPage() {
 
         {/* Weeks */}
         <div className="space-y-6">
-          {plan.plan_weeks?.map(week => (
-            <div key={week.id} className="card">
+          {weeks.map(week => (
+            <div key={week.id} id={`week-${week.week_number}`} className="card">
+              {/* Week header — shared between generated and skeleton */}
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="font-display text-xl">
@@ -358,84 +447,141 @@ export default function PlanViewPage() {
                       <span className="text-volt ml-3 text-sm">{PHASE_LABELS[week.phase] || week.phase}</span>
                     )}
                   </h2>
-                  {week.notes && <p className="text-smoke text-sm mt-1">{week.notes}</p>}
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    {week.start_date && (
+                      <span className="text-smoke text-xs">
+                        {formatWeekRange(week.start_date)}
+                      </span>
+                    )}
+                    {week.notes && <span className="text-smoke text-xs">— {week.notes}</span>}
+                  </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-volt font-display text-lg">{week.total_km}KM</p>
-                  <p className="text-smoke text-xs uppercase">Total Volume</p>
+                  {week.is_generated ? (
+                    <>
+                      <p className="text-volt font-display text-lg">{week.total_km || 0}KM</p>
+                      {week.km_target && week.km_target !== week.total_km && (
+                        <p className="text-smoke text-xs">Target: {week.km_target}km</p>
+                      )}
+                      <p className="text-smoke text-xs uppercase">Total Volume</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-volt font-display text-lg">{week.km_target || '—'}KM</p>
+                      <p className="text-smoke text-xs uppercase">Target Volume</p>
+                    </>
+                  )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-7 gap-2">
-                {DAY_NAMES.map((day, i) => {
-                  const workout = week.workouts?.find(w => w.day_of_week === i);
-                  if (!workout) {
+              {/* Generated week → full workout grid */}
+              {week.is_generated ? (
+                <div className="grid grid-cols-7 gap-2">
+                  {DAY_NAMES.map((day, i) => {
+                    const workout = week.workouts?.find(w => w.day_of_week === i);
+                    if (!workout) {
+                      return (
+                        <div key={i} className="border border-ash/50 p-3 min-h-[120px]">
+                          <p className="text-smoke text-xs font-semibold mb-1">{day}</p>
+                        </div>
+                      );
+                    }
+
+                    const colorClass = WORKOUT_COLORS[workout.workout_type] || 'border-ash';
+                    const isEditing = editingWorkout === workout.id;
+                    const isExpanded = expandedWorkout === workout.id;
+
                     return (
-                      <div key={i} className="border border-ash/50 p-3 min-h-[120px]">
-                        <p className="text-smoke text-xs font-semibold mb-1">{day}</p>
+                      <div key={i} className={`border-l-4 border-t border-r border-b border-ash p-3 min-h-[120px] ${colorClass}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-smoke text-xs font-semibold">{day}</p>
+                          <div className="flex items-center gap-1">
+                            {canEdit && !isEditing && (
+                              <button onClick={() => startEdit(workout)} className="text-smoke hover:text-volt">
+                                <Edit3 size={12} />
+                              </button>
+                            )}
+                            {canEdit && isEditing && (
+                              <button onClick={() => saveEdit(workout.id)} className="text-volt hover:text-white">
+                                <Save size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {isEditing ? (
+                          <EditForm editForm={editForm} setEditForm={setEditForm} onCancel={() => setEditingWorkout(null)} />
+                        ) : (
+                          <div
+                            className="cursor-pointer"
+                            onClick={() => setExpandedWorkout(isExpanded ? null : workout.id)}
+                          >
+                            <p className="text-white text-xs font-bold uppercase leading-tight">{workout.title}</p>
+                            {workout.distance_km && (
+                              <p className="text-volt text-xs font-semibold mt-1">{workout.distance_km}km</p>
+                            )}
+                            {workout.pace_range_min && workout.pace_range_max && (
+                              <p className="text-smoke text-xs mt-1">
+                                {formatPace(workout.pace_range_min)}-{formatPace(workout.pace_range_max)}
+                              </p>
+                            )}
+                            {workout.hr_zone && (
+                              <p className="text-smoke text-xs">{workout.hr_zone}</p>
+                            )}
+                            {isExpanded && (
+                              <div className="mt-2 pt-2 border-t border-ash/50 space-y-1">
+                                {workout.duration_minutes && <p className="text-smoke text-xs">{workout.duration_minutes} min</p>}
+                                {workout.description && <p className="text-smoke text-xs">{workout.description}</p>}
+                                {workout.coach_notes && <p className="text-volt/80 text-xs">Coach: {workout.coach_notes}</p>}
+                                {workout.intervals_detail && (
+                                  <p className="text-smoke text-xs">
+                                    {workout.intervals_detail.reps}x{workout.intervals_detail.distance_m}m @ {formatPace(workout.intervals_detail.pace_sec_km)}/km, {workout.intervals_detail.rest_seconds}s rest
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
-                  }
+                  })}
+                </div>
+              ) : (
+                /* Skeleton week → generate prompt */
+                <div className="border-2 border-dashed border-ash/50 p-6 text-center">
+                  <div className="flex items-center justify-center gap-3 mb-3">
+                    {week.intensity && <IntensityBadge intensity={week.intensity} />}
+                    <span className="text-smoke text-sm">
+                      {week.km_target}km planned
+                      {week.intensity && ` · ${week.intensity} intensity`}
+                    </span>
+                  </div>
 
-                  const colorClass = WORKOUT_COLORS[workout.workout_type] || 'border-ash';
-                  const isEditing = editingWorkout === workout.id;
-                  const isExpanded = expandedWorkout === workout.id;
-
-                  return (
-                    <div key={i} className={`border-l-4 border-t border-r border-b border-ash p-3 min-h-[120px] ${colorClass}`}>
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="text-smoke text-xs font-semibold">{day}</p>
-                        <div className="flex items-center gap-1">
-                          {canEdit && !isEditing && (
-                            <button onClick={() => startEdit(workout)} className="text-smoke hover:text-volt">
-                              <Edit3 size={12} />
-                            </button>
-                          )}
-                          {canEdit && isEditing && (
-                            <button onClick={() => saveEdit(workout.id)} className="text-volt hover:text-white">
-                              <Save size={12} />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {isEditing ? (
-                        <EditForm editForm={editForm} setEditForm={setEditForm} onCancel={() => setEditingWorkout(null)} />
+                  {isCoach && isDraft && (
+                    <button
+                      onClick={() => handleGenerateWeek(week.id)}
+                      disabled={generatingWeek !== null}
+                      className="btn-primary inline-flex items-center gap-2 mt-2"
+                    >
+                      {generatingWeek === week.id ? (
+                        <>
+                          <Loader size={16} className="animate-spin" />
+                          GENERATING...
+                        </>
                       ) : (
-                        <div
-                          className="cursor-pointer"
-                          onClick={() => setExpandedWorkout(isExpanded ? null : workout.id)}
-                        >
-                          <p className="text-white text-xs font-bold uppercase leading-tight">{workout.title}</p>
-                          {workout.distance_km && (
-                            <p className="text-volt text-xs font-semibold mt-1">{workout.distance_km}km</p>
-                          )}
-                          {workout.pace_range_min && workout.pace_range_max && (
-                            <p className="text-smoke text-xs mt-1">
-                              {formatPace(workout.pace_range_min)}-{formatPace(workout.pace_range_max)}
-                            </p>
-                          )}
-                          {workout.hr_zone && (
-                            <p className="text-smoke text-xs">{workout.hr_zone}</p>
-                          )}
-                          {isExpanded && (
-                            <div className="mt-2 pt-2 border-t border-ash/50 space-y-1">
-                              {workout.duration_minutes && <p className="text-smoke text-xs">{workout.duration_minutes} min</p>}
-                              {workout.description && <p className="text-smoke text-xs">{workout.description}</p>}
-                              {workout.coach_notes && <p className="text-volt/80 text-xs">Coach: {workout.coach_notes}</p>}
-                              {workout.intervals_detail && (
-                                <p className="text-smoke text-xs">
-                                  {workout.intervals_detail.reps}x{workout.intervals_detail.distance_m}m @ {formatPace(workout.intervals_detail.pace_sec_km)}/km, {workout.intervals_detail.rest_seconds}s rest
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                        <>
+                          <Zap size={16} />
+                          GENERATE THIS WEEK
+                        </>
                       )}
-                    </div>
-                  );
-                })}
-              </div>
+                    </button>
+                  )}
+
+                  {!isCoach && (
+                    <p className="text-smoke text-xs mt-2">Workouts have not been generated for this week yet.</p>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -591,6 +737,26 @@ export default function PlanViewPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/* ─── Helper: format week date range from start_date ─── */
+function formatWeekRange(startDateStr) {
+  if (!startDateStr) return '';
+  const start = new Date(startDateStr + 'T00:00:00');
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const opts = { month: 'short', day: 'numeric' };
+  return `${start.toLocaleDateString('en-US', opts)} — ${end.toLocaleDateString('en-US', opts)}`;
+}
+
+/* ─── Intensity Badge ─── */
+function IntensityBadge({ intensity }) {
+  const style = INTENSITY_STYLES[intensity] || INTENSITY_STYLES.moderate;
+  return (
+    <span className={`px-2 py-0.5 text-xs font-bold uppercase tracking-wider border ${style}`}>
+      {intensity}
+    </span>
   );
 }
 

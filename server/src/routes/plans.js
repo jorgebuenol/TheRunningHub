@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { coachOnly } from '../middleware/auth.js';
-import { generateTrainingPlan } from '../services/planGenerator.js';
+import { generateTrainingPlan, generateMacroPlan, generateWeeklyDetail } from '../services/planGenerator.js';
+import { getAthleteMonitoringSummary } from '../services/monitoring.js';
 import { addDays, startOfWeek } from '../utils/dates.js';
 import { isOnboardingComplete, getMissingSections } from '../utils/onboardingProgress.js';
 
@@ -35,10 +36,10 @@ planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
       });
     }
 
-    // Generate plan with AI
-    let aiPlan;
+    // Generate macro periodization skeleton with AI
+    let macroPlan;
     try {
-      aiPlan = await generateTrainingPlan(athlete, athlete.profiles);
+      macroPlan = await generateMacroPlan(athlete, athlete.profiles);
     } catch (aiErr) {
       const msg = aiErr.message || '';
       if (msg.includes('credit balance')) {
@@ -72,62 +73,140 @@ planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
     // Calculate the Monday of the current week as plan start
     const planStart = getMonday(new Date());
 
-    // Insert weeks and workouts
-    for (const week of aiPlan.weeks) {
-      const { data: planWeek, error: weekErr } = await req.supabase
+    // Insert macro skeleton weeks (NO workouts — those are generated per-week)
+    for (const week of macroPlan.weeks) {
+      const weekStart = new Date(planStart);
+      weekStart.setDate(weekStart.getDate() + (week.week_number - 1) * 7);
+
+      const { error: weekErr } = await req.supabase
         .from('plan_weeks')
         .insert({
           plan_id: plan.id,
           week_number: week.week_number,
           phase: week.phase,
-          total_km: week.total_km,
+          total_km: null,
+          km_target: week.km_target,
+          intensity: week.intensity,
           notes: week.notes,
-        })
-        .select()
-        .single();
-
-      if (weekErr) throw weekErr;
-
-      // Insert workouts for this week
-      if (week.workouts?.length > 0) {
-        const workouts = week.workouts.map(w => {
-          const weekStart = new Date(planStart);
-          weekStart.setDate(weekStart.getDate() + (week.week_number - 1) * 7);
-          const workoutDate = new Date(weekStart);
-          workoutDate.setDate(workoutDate.getDate() + w.day_of_week);
-
-          return {
-            plan_week_id: planWeek.id,
-            athlete_id: athleteId,
-            day_of_week: w.day_of_week,
-            workout_date: workoutDate.toISOString().split('T')[0],
-            workout_type: w.workout_type,
-            title: w.title,
-            description: w.description,
-            distance_km: w.distance_km,
-            duration_minutes: w.duration_minutes,
-            pace_target_sec_km: w.pace_target_sec_km,
-            pace_range_min: w.pace_range_min,
-            pace_range_max: w.pace_range_max,
-            hr_zone: w.hr_zone,
-            intervals_detail: w.intervals_detail,
-            coach_notes: w.coach_notes,
-            session_structure: w.session_structure || null,
-            rpe_target: w.rpe_target || null,
-          };
+          is_generated: false,
+          start_date: weekStart.toISOString().split('T')[0],
         });
 
-        const { error: workoutsErr } = await req.supabase
-          .from('workouts')
-          .insert(workouts);
-
-        if (workoutsErr) throw workoutsErr;
-      }
+      if (weekErr) throw weekErr;
     }
 
     // Return the full plan
     const fullPlan = await fetchFullPlan(req.supabase, plan.id);
     res.status(201).json(fullPlan);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST generate weekly detail for a single week
+planRoutes.post('/:planId/weeks/:weekId/generate', coachOnly, async (req, res, next) => {
+  try {
+    const { planId, weekId } = req.params;
+
+    // 1. Fetch the full plan with athlete data
+    const fullPlan = await fetchFullPlan(req.supabase, planId);
+    if (!fullPlan) return res.status(404).json({ message: 'Plan not found' });
+    if (fullPlan.status !== 'draft') {
+      return res.status(409).json({ message: 'Can only generate weeks for draft plans' });
+    }
+
+    // 2. Find the target week
+    const targetWeek = fullPlan.plan_weeks?.find(w => w.id === weekId);
+    if (!targetWeek) return res.status(404).json({ message: 'Week not found' });
+    if (targetWeek.is_generated) {
+      return res.status(409).json({ message: 'Week already generated. Use AI chat to adjust existing workouts.' });
+    }
+
+    const athlete = fullPlan.athletes;
+    if (!athlete) return res.status(404).json({ message: 'Athlete not found' });
+
+    // 3. Fetch monitoring data
+    let monitoringData = null;
+    try {
+      monitoringData = await getAthleteMonitoringSummary(req.supabase, athlete.id);
+    } catch (monErr) {
+      console.warn('Could not fetch monitoring data:', monErr.message);
+    }
+
+    // 4. Build previous weeks summary
+    const previousWeeksSummary = buildPreviousWeeksSummary(fullPlan.plan_weeks, targetWeek.week_number);
+
+    // 5. Build surrounding weeks context from macro plan
+    const surrounding = (fullPlan.plan_weeks || [])
+      .filter(w => Math.abs(w.week_number - targetWeek.week_number) <= 2 && w.week_number !== targetWeek.week_number)
+      .map(w => ({ week_number: w.week_number, phase: w.phase, km_target: w.km_target, intensity: w.intensity }));
+
+    // 6. Generate weekly detail via AI
+    let weekDetail;
+    try {
+      weekDetail = await generateWeeklyDetail(
+        athlete,
+        athlete.profiles,
+        {
+          ...targetWeek,
+          total_weeks: fullPlan.total_weeks,
+          surrounding,
+        },
+        monitoringData,
+        previousWeeksSummary
+      );
+    } catch (aiErr) {
+      const msg = aiErr.message || '';
+      if (msg.includes('credit balance')) {
+        return res.status(402).json({ message: 'Anthropic API credits exhausted. Please add credits at console.anthropic.com.' });
+      }
+      return res.status(500).json({ message: `AI generation failed: ${msg.substring(0, 150)}` });
+    }
+
+    // 7. Insert workouts
+    const workouts = weekDetail.workouts.map(w => {
+      const workoutDate = new Date(targetWeek.start_date);
+      workoutDate.setDate(workoutDate.getDate() + w.day_of_week);
+
+      return {
+        plan_week_id: weekId,
+        athlete_id: athlete.id,
+        day_of_week: w.day_of_week,
+        workout_date: workoutDate.toISOString().split('T')[0],
+        workout_type: w.workout_type,
+        title: w.title,
+        description: w.description,
+        distance_km: w.distance_km,
+        duration_minutes: w.duration_minutes,
+        pace_target_sec_km: w.pace_target_sec_km,
+        pace_range_min: w.pace_range_min,
+        pace_range_max: w.pace_range_max,
+        hr_zone: w.hr_zone,
+        intervals_detail: w.intervals_detail,
+        coach_notes: w.coach_notes,
+        session_structure: w.session_structure || null,
+        rpe_target: w.rpe_target || null,
+      };
+    });
+
+    const { error: workoutsErr } = await req.supabase
+      .from('workouts')
+      .insert(workouts);
+
+    if (workoutsErr) throw workoutsErr;
+
+    // 8. Update week: mark as generated, set total_km from workouts
+    const totalKm = workouts.reduce((sum, w) => sum + (parseFloat(w.distance_km) || 0), 0);
+    const { error: updateErr } = await req.supabase
+      .from('plan_weeks')
+      .update({ is_generated: true, total_km: Math.round(totalKm * 10) / 10 })
+      .eq('id', weekId);
+
+    if (updateErr) throw updateErr;
+
+    // 9. Return updated full plan
+    const updatedPlan = await fetchFullPlan(req.supabase, planId);
+    res.status(201).json(updatedPlan);
   } catch (err) {
     next(err);
   }
@@ -210,6 +289,10 @@ planRoutes.post('/:planId/unpublish', coachOnly, async (req, res, next) => {
           week_number: week.week_number,
           phase: week.phase,
           total_km: week.total_km,
+          km_target: week.km_target,
+          intensity: week.intensity,
+          is_generated: week.is_generated,
+          start_date: week.start_date,
           notes: week.notes,
         })
         .select()
@@ -397,4 +480,26 @@ function getMonday(date) {
   d.setDate(diff);
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+/**
+ * Build a compact summary of previously generated weeks for AI context
+ */
+function buildPreviousWeeksSummary(planWeeks, currentWeekNumber) {
+  return (planWeeks || [])
+    .filter(w => w.week_number < currentWeekNumber && w.is_generated)
+    .map(w => {
+      const plannedKm = w.km_target || 0;
+      const actualKm = w.total_km || 0;
+      const workouts = w.workouts || [];
+      const completed = workouts.filter(wo => wo.status === 'completed').length;
+      const total = workouts.filter(wo => wo.workout_type !== 'rest').length;
+      return {
+        week_number: w.week_number,
+        phase: w.phase,
+        km_target: plannedKm,
+        actual_km: actualKm,
+        compliance: total > 0 ? Math.round((completed / total) * 100) : null,
+      };
+    });
 }
