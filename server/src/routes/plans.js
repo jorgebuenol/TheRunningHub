@@ -112,6 +112,8 @@ planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
             hr_zone: w.hr_zone,
             intervals_detail: w.intervals_detail,
             coach_notes: w.coach_notes,
+            session_structure: w.session_structure || null,
+            rpe_target: w.rpe_target || null,
           };
         });
 
@@ -232,6 +234,8 @@ planRoutes.post('/:planId/unpublish', coachOnly, async (req, res, next) => {
           hr_zone: w.hr_zone,
           intervals_detail: w.intervals_detail,
           coach_notes: w.coach_notes,
+          session_structure: w.session_structure || null,
+          rpe_target: w.rpe_target || null,
         }));
 
         const { error: workoutsErr } = await req.supabase

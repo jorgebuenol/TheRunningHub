@@ -10,7 +10,7 @@ athleteRoutes.get('/me', async (req, res, next) => {
   try {
     const { data, error } = await req.supabase
       .from('athletes')
-      .select('*')
+      .select('*, training_plans(id, name, status, race_date, goal_race)')
       .eq('profile_id', req.user.id)
       .single();
 
