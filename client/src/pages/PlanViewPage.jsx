@@ -534,7 +534,7 @@ export default function PlanViewPage() {
 
               {/* Generated week → full workout grid */}
               {week.is_generated ? (
-                <div className="grid grid-cols-7 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
                   {DAY_NAMES.map((day, i) => {
                     const workout = week.workouts?.find(w => w.day_of_week === i);
                     if (!workout) {
