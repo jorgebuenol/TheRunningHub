@@ -25,12 +25,27 @@ export async function authMiddleware(req, res, next) {
     return res.status(401).json({ message: 'Invalid or expired token' });
   }
 
-  // Attach user and profile
-  const { data: profile } = await supabase
+  // Attach user and profile (auto-create if trigger didn't fire)
+  let { data: profile } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', user.id)
     .single();
+
+  if (!profile) {
+    const meta = user.user_metadata || {};
+    const { data: newProfile } = await supabase
+      .from('profiles')
+      .insert({
+        id: user.id,
+        email: user.email || '',
+        full_name: meta.full_name || 'New User',
+        role: meta.role || 'athlete',
+      })
+      .select()
+      .single();
+    profile = newProfile;
+  }
 
   req.user = user;
   req.profile = profile;
