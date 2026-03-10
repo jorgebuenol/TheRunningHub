@@ -1,6 +1,12 @@
 /**
  * Server-side VDOT calculator (mirrors client logic)
+ *
+ * Jack Daniels Running Formula — calculates VDOT from race performance
+ * and derives training paces stored in DB columns.
  */
+
+const VDOT_MIN = 10;
+const VDOT_MAX = 85;
 
 function oxygenCost(v) {
   return -4.60 + 0.182258 * v + 0.000104 * v * v;
@@ -11,11 +17,21 @@ function vo2Fraction(t) {
 }
 
 export function calculateVDOT(distanceMeters, timeSeconds) {
+  if (!distanceMeters || !timeSeconds || timeSeconds <= 0) return 0;
+
+  const minPace = 1.5;  // m/s
+  const maxPace = 7.0;  // m/s
+  const pace = distanceMeters / timeSeconds;
+  if (pace < minPace || pace > maxPace) return 0;
+
   const timeMinutes = timeSeconds / 60;
   const velocity = distanceMeters / timeMinutes;
   const vo2 = oxygenCost(velocity);
   const fraction = vo2Fraction(timeMinutes);
-  return vo2 / fraction;
+  const vdot = vo2 / fraction;
+
+  if (vdot < VDOT_MIN || vdot > VDOT_MAX || !isFinite(vdot)) return 0;
+  return vdot;
 }
 
 export function getBestVDOT(raceTimes) {
@@ -28,7 +44,7 @@ export function getBestVDOT(raceTimes) {
       if (vdot > bestVdot) bestVdot = vdot;
     }
   }
-  return Math.round(bestVdot * 100) / 100;
+  return Math.round(bestVdot * 10) / 10;
 }
 
 function velocityAtIntensity(vdot, intensityPct) {
@@ -48,12 +64,14 @@ function velocityToPaceSecPerKm(v) {
 
 export function getTrainingPaces(vdot) {
   if (!vdot || vdot <= 0) return null;
-  const easyMinV = velocityAtIntensity(vdot, 0.59);
-  const easyMaxV = velocityAtIntensity(vdot, 0.74);
+
+  const easySlowV = velocityAtIntensity(vdot, 0.65);
+  const easyFastV = velocityAtIntensity(vdot, 0.79);
+
   return {
-    pace_easy_min: velocityToPaceSecPerKm(easyMaxV),
-    pace_easy_max: velocityToPaceSecPerKm(easyMinV),
-    pace_tempo: velocityToPaceSecPerKm(velocityAtIntensity(vdot, 0.83)),
+    pace_easy_min: velocityToPaceSecPerKm(easyFastV),
+    pace_easy_max: velocityToPaceSecPerKm(easySlowV),
+    pace_tempo: velocityToPaceSecPerKm(velocityAtIntensity(vdot, 0.84)),
     pace_lt: velocityToPaceSecPerKm(velocityAtIntensity(vdot, 0.88)),
     pace_race: velocityToPaceSecPerKm(velocityAtIntensity(vdot, 0.93)),
     pace_vo2max: velocityToPaceSecPerKm(velocityAtIntensity(vdot, 0.98)),
@@ -61,7 +79,7 @@ export function getTrainingPaces(vdot) {
 }
 
 export function formatPace(secPerKm) {
-  if (!secPerKm) return '--:--';
+  if (!secPerKm || secPerKm <= 0) return '--:--';
   const min = Math.floor(secPerKm / 60);
   const sec = secPerKm % 60;
   return `${min}:${String(sec).padStart(2, '0')}`;

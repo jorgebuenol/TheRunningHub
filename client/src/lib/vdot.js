@@ -4,7 +4,14 @@
  * Calculates VDOT from race performance and derives training paces.
  * All paces returned as seconds per kilometer.
  * Times input/output in total seconds.
+ *
+ * Return keys use pace_ prefix to match DB column names:
+ *   pace_easy_min, pace_easy_max, pace_tempo, pace_lt, pace_race, pace_vo2max
  */
+
+// Reasonable VDOT bounds (recreational jogger to world-class elite)
+const VDOT_MIN = 10;
+const VDOT_MAX = 85;
 
 // Oxygen cost of running at velocity v (meters/min)
 function oxygenCost(v) {
@@ -17,23 +24,38 @@ function vo2Fraction(t) {
 }
 
 /**
- * Calculate VDOT from a race result
+ * Calculate VDOT from a race result.
+ * Returns 0 for unreasonable inputs.
  * @param {number} distanceMeters - Race distance in meters
  * @param {number} timeSeconds - Finishing time in seconds
- * @returns {number} VDOT value
+ * @returns {number} VDOT value (clamped to 10–85 range, or 0 if invalid)
  */
 export function calculateVDOT(distanceMeters, timeSeconds) {
+  if (!distanceMeters || !timeSeconds || timeSeconds <= 0) return 0;
+
+  // Sanity: reject times that are physically impossible
+  // (e.g. under 10 min for a marathon, or > 10 hours for a 5K)
+  const minPace = 1.5;  // m/s — ~11:07/km (very slow walk-jog)
+  const maxPace = 7.0;  // m/s — ~2:23/km (world-record sprint)
+  const pace = distanceMeters / timeSeconds;
+  if (pace < minPace || pace > maxPace) return 0;
+
   const timeMinutes = timeSeconds / 60;
   const velocity = distanceMeters / timeMinutes; // meters per min
 
   const vo2 = oxygenCost(velocity);
   const fraction = vo2Fraction(timeMinutes);
 
-  return vo2 / fraction;
+  const vdot = vo2 / fraction;
+
+  // Clamp to reasonable range
+  if (vdot < VDOT_MIN || vdot > VDOT_MAX || !isFinite(vdot)) return 0;
+  return vdot;
 }
 
 /**
- * Get the best (highest) VDOT from multiple race times
+ * Get the best (highest) VDOT from multiple race times.
+ * Picks the race giving the highest VDOT.
  */
 export function getBestVDOT(raceTimes) {
   const distances = {
@@ -53,16 +75,16 @@ export function getBestVDOT(raceTimes) {
     }
   }
 
-  return Math.round(bestVdot * 100) / 100;
+  return Math.round(bestVdot * 10) / 10; // 1 decimal place
 }
 
 /**
- * Velocity (m/min) for a given VDOT and % VO2max intensity
+ * Velocity (m/min) for a given VDOT and % VO2max intensity.
+ * Inverts the oxygenCost equation using the quadratic formula.
  */
 function velocityAtIntensity(vdot, intensityPct) {
   const targetVO2 = vdot * intensityPct;
-  // Solve oxygen cost equation for velocity using quadratic formula
-  // 0.000104*v^2 + 0.182258*v + (-4.60 - targetVO2) = 0
+  // Solve: 0.000104*v^2 + 0.182258*v + (-4.60 - targetVO2) = 0
   const a = 0.000104;
   const b = 0.182258;
   const c = -4.60 - targetVO2;
@@ -80,42 +102,49 @@ function velocityToPaceSecPerKm(v) {
 }
 
 /**
- * Calculate all training paces from VDOT
- * Returns paces in seconds per kilometer
+ * Calculate all training paces from VDOT.
+ * Returns paces in seconds per kilometer.
+ *
+ * Jack Daniels intensity zones (% of VO2max):
+ *   Easy (E):        65–79%
+ *   Marathon (M):    80–84%   → used as "Tempo" label
+ *   Threshold (T):   86–88%   → lactate threshold
+ *   Interval (I):    97–100%  → VO2max intervals
+ *
+ * Keys use pace_ prefix to match DB column names.
  */
 export function getTrainingPaces(vdot) {
   if (!vdot || vdot <= 0) {
     return {
-      easy_min: 0, easy_max: 0,
-      tempo: 0, lt: 0,
-      race_5k: 0, race_10k: 0,
-      race_hm: 0, race_marathon: 0,
-      vo2max: 0,
+      pace_easy_min: 0, pace_easy_max: 0,
+      pace_tempo: 0, pace_lt: 0,
+      pace_race: 0, pace_vo2max: 0,
     };
   }
 
-  const easyMinV = velocityAtIntensity(vdot, 0.59);
-  const easyMaxV = velocityAtIntensity(vdot, 0.74);
-  const tempoV = velocityAtIntensity(vdot, 0.83);
+  // Easy range: 65–79% VO2max
+  const easySlowV = velocityAtIntensity(vdot, 0.65);
+  const easyFastV = velocityAtIntensity(vdot, 0.79);
+
+  // Marathon / Tempo: ~84% VO2max
+  const tempoV = velocityAtIntensity(vdot, 0.84);
+
+  // Threshold (T pace): ~88% VO2max — lactate threshold
   const ltV = velocityAtIntensity(vdot, 0.88);
+
+  // Race pace: ~93% VO2max (roughly 10K–HM effort)
+  const raceV = velocityAtIntensity(vdot, 0.93);
+
+  // VO2max intervals (I pace): ~98% VO2max
   const vo2maxV = velocityAtIntensity(vdot, 0.98);
 
-  // Race paces estimated from VDOT tables
-  const race5kV = velocityAtIntensity(vdot, 0.97);
-  const race10kV = velocityAtIntensity(vdot, 0.93);
-  const raceHmV = velocityAtIntensity(vdot, 0.87);
-  const raceMarathonV = velocityAtIntensity(vdot, 0.82);
-
   return {
-    easy_min: velocityToPaceSecPerKm(easyMaxV),  // faster end of easy
-    easy_max: velocityToPaceSecPerKm(easyMinV),   // slower end of easy
-    tempo: velocityToPaceSecPerKm(tempoV),
-    lt: velocityToPaceSecPerKm(ltV),
-    race_5k: velocityToPaceSecPerKm(race5kV),
-    race_10k: velocityToPaceSecPerKm(race10kV),
-    race_hm: velocityToPaceSecPerKm(raceHmV),
-    race_marathon: velocityToPaceSecPerKm(raceMarathonV),
-    vo2max: velocityToPaceSecPerKm(vo2maxV),
+    pace_easy_min: velocityToPaceSecPerKm(easyFastV),   // faster end of easy
+    pace_easy_max: velocityToPaceSecPerKm(easySlowV),   // slower end of easy
+    pace_tempo: velocityToPaceSecPerKm(tempoV),
+    pace_lt: velocityToPaceSecPerKm(ltV),
+    pace_race: velocityToPaceSecPerKm(raceV),
+    pace_vo2max: velocityToPaceSecPerKm(vo2maxV),
   };
 }
 
@@ -150,6 +179,7 @@ export function formatTime(totalSeconds) {
 export function parseTime(timeStr) {
   if (!timeStr) return 0;
   const parts = timeStr.split(':').map(Number);
+  if (parts.some(isNaN)) return 0;
   if (parts.length === 3) {
     return parts[0] * 3600 + parts[1] * 60 + parts[2];
   }
