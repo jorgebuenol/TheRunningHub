@@ -506,14 +506,17 @@ function RunningHistoryFields({ athlete, updateField, vdot, paces }) {
       </div>
       {vdot > 0 && (
         <div className="mt-4 p-4 border border-volt bg-volt/5">
-          <p className="text-volt font-display text-lg mb-2">VO2max: {vdot}</p>
+          <div className="flex items-center gap-2 mb-2">
+            <p className="text-volt font-display text-lg">VDOT: {vdot}</p>
+            <span className="text-smoke text-xs" title="VDOT is a performance index based on Jack Daniels' Running Formula. It is not a true VO2max measurement but correlates with running fitness.">(performance index)</span>
+          </div>
           {paces && (
             <div className="grid grid-cols-3 gap-2 text-xs">
-              <div><span className="text-smoke">Easy:</span> <span className="text-green-400">{formatPace(paces.pace_easy_min)}-{formatPace(paces.pace_easy_max)}</span></div>
-              <div><span className="text-smoke">Tempo:</span> <span className="text-yellow-400">{formatPace(paces.pace_tempo)}</span></div>
-              <div><span className="text-smoke">Threshold:</span> <span className="text-orange-400">{formatPace(paces.pace_lt)}</span></div>
-              <div><span className="text-smoke">Race:</span> <span className="text-red-400">{formatPace(paces.pace_race)}</span></div>
-              <div><span className="text-smoke">VO2max:</span> <span className="text-red-500">{formatPace(paces.pace_vo2max)}</span></div>
+              <div><span className="text-smoke">Easy:</span> <span className="text-green-400">{formatPace(paces.pace_easy_min)}-{formatPace(paces.pace_easy_max)}/km</span></div>
+              <div><span className="text-smoke">Tempo:</span> <span className="text-yellow-400">{formatPace(paces.pace_tempo)}/km</span></div>
+              <div><span className="text-smoke">Threshold:</span> <span className="text-orange-400">{formatPace(paces.pace_lt)}/km</span></div>
+              <div><span className="text-smoke">Race:</span> <span className="text-red-400">{formatPace(paces.pace_race)}/km</span></div>
+              <div><span className="text-smoke">Interval:</span> <span className="text-red-500">{formatPace(paces.pace_vo2max)}/km</span></div>
             </div>
           )}
         </div>
