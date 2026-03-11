@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { api } from '../lib/api';
 import { formatPace, formatTime } from '../lib/vdot';
 import WorkoutFeedbackModal from '../components/athletes/WorkoutFeedbackModal';
+import WorkoutDetailPanel from '../components/WorkoutDetailPanel';
 import { Calendar, Check, Zap, MessageSquare, ClipboardCheck, BarChart3, User } from 'lucide-react';
 import { getOverallProgress } from '@shared/onboardingProgress';
 
@@ -31,6 +32,7 @@ export default function MyPlanPage() {
   const [noteWorkout, setNoteWorkout] = useState(null);
   const [noteText, setNoteText] = useState('');
   const [feedbackWorkout, setFeedbackWorkout] = useState(null);
+  const [selectedWorkout, setSelectedWorkout] = useState(null);
   const [todayCheckedIn, setTodayCheckedIn] = useState(null);
   const [workoutFeedbacks, setWorkoutFeedbacks] = useState({});
 
@@ -268,7 +270,8 @@ export default function MyPlanPage() {
           return (
             <div
               key={i}
-              className={`border-l-4 p-3 ${colors} ${isToday ? 'ring-1 ring-volt' : ''} flex items-center justify-between gap-3`}
+              className={`border-l-4 p-3 ${colors} ${isToday ? 'ring-1 ring-volt' : ''} flex items-center justify-between gap-3 ${workout ? 'cursor-pointer hover:bg-white/5 transition-colors' : ''}`}
+              onClick={() => workout && setSelectedWorkout(workout)}
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <p className={`text-xs font-bold w-8 flex-shrink-0 ${isToday ? 'text-volt' : 'text-smoke'}`}>{day}</p>
@@ -294,14 +297,14 @@ export default function MyPlanPage() {
               {workout && (
                 <div className="flex gap-2 flex-shrink-0">
                   {workout.status !== 'completed' && (
-                    <button onClick={() => markCompleted(workout.id)} className="text-smoke hover:text-green-400 min-h-[44px] min-w-[44px] flex items-center justify-center">
+                    <button onClick={(e) => { e.stopPropagation(); markCompleted(workout.id); }} className="text-smoke hover:text-green-400 min-h-[44px] min-w-[44px] flex items-center justify-center">
                       <Check size={16} />
                     </button>
                   )}
-                  <button onClick={() => setFeedbackWorkout(workout)} className="text-smoke hover:text-volt min-h-[44px] min-w-[44px] flex items-center justify-center" title="Log feedback">
+                  <button onClick={(e) => { e.stopPropagation(); setFeedbackWorkout(workout); }} className="text-smoke hover:text-volt min-h-[44px] min-w-[44px] flex items-center justify-center" title="Log feedback">
                     <BarChart3 size={16} />
                   </button>
-                  <button onClick={() => { setNoteWorkout(workout); setNoteText(workout.athlete_notes || ''); }} className="text-smoke hover:text-volt min-h-[44px] min-w-[44px] flex items-center justify-center">
+                  <button onClick={(e) => { e.stopPropagation(); setNoteWorkout(workout); setNoteText(workout.athlete_notes || ''); }} className="text-smoke hover:text-volt min-h-[44px] min-w-[44px] flex items-center justify-center">
                     <MessageSquare size={16} />
                   </button>
                 </div>
@@ -326,7 +329,8 @@ export default function MyPlanPage() {
           return (
             <div
               key={i}
-              className={`border-l-4 p-3 min-h-[140px] ${colors} ${isToday ? 'ring-1 ring-volt' : ''}`}
+              className={`border-l-4 p-3 min-h-[140px] ${colors} ${isToday ? 'ring-1 ring-volt' : ''} ${workout ? 'cursor-pointer hover:bg-white/5 transition-colors' : ''}`}
+              onClick={() => workout && setSelectedWorkout(workout)}
             >
               <p className={`text-xs font-bold mb-2 ${isToday ? 'text-volt' : 'text-smoke'}`}>{day}</p>
               {workout ? (
@@ -347,14 +351,14 @@ export default function MyPlanPage() {
                   )}
                   <div className="flex gap-1 mt-2">
                     {workout.status !== 'completed' && (
-                      <button onClick={() => markCompleted(workout.id)} className="text-smoke hover:text-green-400">
+                      <button onClick={(e) => { e.stopPropagation(); markCompleted(workout.id); }} className="text-smoke hover:text-green-400">
                         <Check size={12} />
                       </button>
                     )}
-                    <button onClick={() => setFeedbackWorkout(workout)} className="text-smoke hover:text-volt" title="Log feedback">
+                    <button onClick={(e) => { e.stopPropagation(); setFeedbackWorkout(workout); }} className="text-smoke hover:text-volt" title="Log feedback">
                       <BarChart3 size={12} />
                     </button>
-                    <button onClick={() => { setNoteWorkout(workout); setNoteText(workout.athlete_notes || ''); }} className="text-smoke hover:text-volt">
+                    <button onClick={(e) => { e.stopPropagation(); setNoteWorkout(workout); setNoteText(workout.athlete_notes || ''); }} className="text-smoke hover:text-volt">
                       <MessageSquare size={12} />
                     </button>
                   </div>
@@ -366,6 +370,18 @@ export default function MyPlanPage() {
           );
         })}
       </div>
+
+      {/* Workout detail panel */}
+      {selectedWorkout && (
+        <WorkoutDetailPanel
+          workout={selectedWorkout}
+          athlete={athlete}
+          isCoach={false}
+          planStatus={plan?.status}
+          onClose={() => setSelectedWorkout(null)}
+          onFeedback={() => { setFeedbackWorkout(selectedWorkout); setSelectedWorkout(null); }}
+        />
+      )}
 
       {/* Note modal */}
       {noteWorkout && (
