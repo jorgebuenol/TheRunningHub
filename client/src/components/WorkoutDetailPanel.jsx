@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { formatPace } from '../lib/vdot';
+import { formatPace, normalizeDescriptionPace } from '../lib/vdot';
 import { X, Check, Edit3, MessageSquare } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -20,6 +20,7 @@ const WORKOUT_COLORS = {
 function getColors(type) {
   return WORKOUT_COLORS[type] || WORKOUT_COLORS.rest;
 }
+
 
 export default function WorkoutDetailPanel({ workout, athlete, isCoach, planStatus, onClose, onEdit, onFeedback }) {
   const colors = getColors(workout.workout_type);
@@ -312,7 +313,7 @@ function LegacyWorkoutDetail({ workout }) {
       {workout.description && (
         <div className="mb-3">
           <p className="text-smoke text-xs uppercase mb-1">Description</p>
-          <p className="text-sm whitespace-pre-wrap">{workout.description}</p>
+          <p className="text-sm whitespace-pre-wrap">{normalizeDescriptionPace(workout.description, workout)}</p>
         </div>
       )}
       {workout.intervals_detail && (

@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
-import { formatPace, formatTime } from '../lib/vdot';
+import { formatPace, formatTime, normalizeDescriptionPace } from '../lib/vdot';
 import {
   ArrowLeft, Calendar, Edit3, Save, X, Check,
   Bot, Send, Loader, MessageSquare, ChevronDown, ChevronRight,
@@ -590,7 +590,7 @@ export default function PlanViewPage() {
                             {isExpanded && (
                               <div className="mt-2 pt-2 border-t border-ash/50 space-y-1">
                                 {workout.duration_minutes && <p className="text-smoke text-xs">{workout.duration_minutes} min</p>}
-                                {workout.description && <p className="text-smoke text-xs">{workout.description}</p>}
+                                {workout.description && <p className="text-smoke text-xs">{normalizeDescriptionPace(workout.description, workout)}</p>}
                                 {workout.coach_notes && <p className="text-volt/80 text-xs">Coach: {workout.coach_notes}</p>}
                                 {workout.intervals_detail && (
                                   <p className="text-smoke text-xs">

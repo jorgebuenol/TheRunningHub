@@ -159,6 +159,20 @@ export function formatPace(secPerKm) {
 }
 
 /**
+ * Replace hardcoded pace ranges in AI-generated description text
+ * with the canonical pace values from the workout record.
+ * Matches patterns like "(5:27 - 6:22 min/km)" or "(5:27-6:22/km)"
+ */
+export function normalizeDescriptionPace(description, workout) {
+  if (!description || !workout?.pace_range_min || !workout?.pace_range_max) return description;
+  const canonical = `${formatPace(workout.pace_range_min)} - ${formatPace(workout.pace_range_max)}`;
+  return description.replace(
+    /\(\d+:\d{2}\s*[-–]\s*\d+:\d{2}\s*(?:min\/km|\/km)\)/g,
+    `(${canonical} min/km)`
+  );
+}
+
+/**
  * Format total seconds to H:MM:SS or MM:SS string
  */
 export function formatTime(totalSeconds) {
