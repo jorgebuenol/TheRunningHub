@@ -23,6 +23,11 @@ const WORKOUT_COLORS = {
 
 const DAY_NAMES = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
+/** Format a Date as 'YYYY-MM-DD' in LOCAL timezone (not UTC) */
+function toLocalDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export default function MyPlanPage() {
   const { user } = useAuth();
   const [athlete, setAthlete] = useState(null);
@@ -84,8 +89,8 @@ export default function MyPlanPage() {
         const sunday = new Date(monday);
         sunday.setDate(sunday.getDate() + 6);
 
-        const mondayStr = monday.toISOString().split('T')[0];
-        const sundayStr = sunday.toISOString().split('T')[0];
+        const mondayStr = toLocalDateStr(monday);
+        const sundayStr = toLocalDateStr(sunday);
 
         const { data: weekWorkouts } = await supabase
           .from('workouts')
@@ -151,7 +156,7 @@ export default function MyPlanPage() {
     ? Math.ceil((new Date(athlete.goal_race_date) - new Date()) / (7 * 24 * 60 * 60 * 1000))
     : null;
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalDateStr(new Date());
   const todayWorkout = thisWeekWorkouts.find(w => w.workout_date === today);
 
   return (
