@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../lib/api';
-import { formatPace } from '../lib/vdot';
+import { formatPace, formatTime } from '../lib/vdot';
 import { useAuth } from '../context/AuthContext';
 import WorkoutFeedbackModal from '../components/athletes/WorkoutFeedbackModal';
 import WorkoutDetailPanel from '../components/WorkoutDetailPanel';
@@ -389,7 +389,7 @@ export default function CalendarPage() {
                       </p>
                     )}
                     {workout.duration_minutes > 0 && (
-                      <p className="text-smoke text-xs mt-1">{workout.duration_minutes} min</p>
+                      <p className="text-smoke text-xs mt-1">{formatTime(Math.round(workout.duration_minutes * 60))}</p>
                     )}
                     {workout.status === 'completed' && (
                       <div className="flex items-center gap-1 mt-2">

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { formatPace, normalizeDescriptionPace } from '../lib/vdot';
+import { formatPace, formatTime, normalizeDescriptionPace } from '../lib/vdot';
 import { X, Check, Edit3, MessageSquare } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -117,8 +117,8 @@ export default function WorkoutDetailPanel({ workout, athlete, isCoach, planStat
               />
               <CompareItem
                 label="Duration"
-                planned={workout.duration_minutes ? `${workout.duration_minutes}m` : '--'}
-                actual={(workout.actual_duration_minutes || feedback?.actual_duration_minutes) ? `${workout.actual_duration_minutes || feedback.actual_duration_minutes}m` : '--'}
+                planned={workout.duration_minutes ? formatTime(Math.round(workout.duration_minutes * 60)) : '--'}
+                actual={(workout.actual_duration_minutes || feedback?.actual_duration_minutes) ? formatTime(Math.round((workout.actual_duration_minutes || feedback.actual_duration_minutes) * 60)) : '--'}
               />
               <CompareItem
                 label="Avg Pace"

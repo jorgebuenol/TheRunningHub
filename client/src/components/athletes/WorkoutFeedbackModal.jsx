@@ -1,6 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../../lib/api';
 import { X, Check } from 'lucide-react';
+import { parseTime, formatTime } from '../../lib/vdot';
+
+/** Convert DB minutes (possibly decimal) to a formatted MM:SS or H:MM:SS string */
+function minutesToDisplay(min) {
+  if (!min && min !== 0) return '';
+  return formatTime(Math.round(min * 60));
+}
+
+/** Convert a MM:SS or H:MM:SS string to decimal minutes for the DB */
+function displayToMinutes(str) {
+  const totalSeconds = parseTime(str);
+  return totalSeconds ? totalSeconds / 60 : null;
+}
 
 const FEELING_OPTIONS = [
   { value: 'great', emoji: '😄', label: 'Great' },
@@ -13,6 +26,10 @@ const FEELING_OPTIONS = [
 export default function WorkoutFeedbackModal({ workout, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [existingFeedback, setExistingFeedback] = useState(null);
+  const [durationDisplay, setDurationDisplay] = useState(
+    workout?.duration_minutes ? minutesToDisplay(workout.duration_minutes) : ''
+  );
+  const durationFocused = useRef(false);
 
   const [form, setForm] = useState({
     rpe: 5,
@@ -37,17 +54,21 @@ export default function WorkoutFeedbackModal({ workout, onClose, onSaved }) {
       const fb = await api.getWorkoutFeedback(workout.id);
       if (fb) {
         setExistingFeedback(fb);
+        const durMin = fb.actual_duration_minutes || workout?.duration_minutes || '';
         setForm({
           rpe: fb.rpe,
           completed: fb.completed,
           actual_distance_km: fb.actual_distance_km || workout?.distance_km || '',
-          actual_duration_minutes: fb.actual_duration_minutes || workout?.duration_minutes || '',
+          actual_duration_minutes: durMin,
           actual_pace_sec_km: fb.actual_pace_sec_km || '',
           avg_hr: fb.avg_hr || '',
           max_hr: fb.max_hr || '',
           feeling: fb.feeling || 'good',
           notes: fb.notes || '',
         });
+        if (!durationFocused.current) {
+          setDurationDisplay(durMin ? minutesToDisplay(durMin) : '');
+        }
       }
     } catch (err) {
       // No existing feedback, that's fine
@@ -64,7 +85,7 @@ export default function WorkoutFeedbackModal({ workout, onClose, onSaved }) {
         rpe: form.rpe,
         completed: form.completed,
         actual_distance_km: form.actual_distance_km ? parseFloat(form.actual_distance_km) : null,
-        actual_duration_minutes: form.actual_duration_minutes ? parseInt(form.actual_duration_minutes) : null,
+        actual_duration_minutes: form.actual_duration_minutes ? parseFloat(form.actual_duration_minutes) : null,
         actual_pace_sec_km: form.actual_distance_km && form.actual_duration_minutes
           ? Math.round((parseFloat(form.actual_duration_minutes) * 60) / parseFloat(form.actual_distance_km))
           : null,
@@ -93,7 +114,7 @@ export default function WorkoutFeedbackModal({ workout, onClose, onSaved }) {
     ? (parseFloat(form.actual_distance_km) - workout.distance_km).toFixed(1)
     : null;
   const durationDelta = form.actual_duration_minutes && workout?.duration_minutes
-    ? parseInt(form.actual_duration_minutes) - workout.duration_minutes
+    ? parseFloat(form.actual_duration_minutes) - workout.duration_minutes
     : null;
 
   return (
@@ -109,7 +130,7 @@ export default function WorkoutFeedbackModal({ workout, onClose, onSaved }) {
             {workout.distance_km && (
               <p className="text-smoke text-xs mt-1">
                 Planned: {workout.distance_km}km
-                {workout.duration_minutes && ` | ${workout.duration_minutes}min`}
+                {workout.duration_minutes && ` | ${minutesToDisplay(workout.duration_minutes)}`}
               </p>
             )}
           </div>
@@ -211,16 +232,24 @@ export default function WorkoutFeedbackModal({ workout, onClose, onSaved }) {
                 )}
               </div>
               <div>
-                <label className="text-smoke text-xs uppercase">Duration (min)</label>
+                <label className="text-smoke text-xs uppercase">Duration</label>
                 <input
-                  type="number"
-                  value={form.actual_duration_minutes}
-                  onChange={e => updateForm('actual_duration_minutes', e.target.value)}
+                  type="text"
+                  placeholder="H:MM:SS"
+                  value={durationDisplay}
+                  onFocus={() => { durationFocused.current = true; }}
+                  onChange={e => setDurationDisplay(e.target.value)}
+                  onBlur={e => {
+                    durationFocused.current = false;
+                    const decimalMin = displayToMinutes(e.target.value);
+                    updateForm('actual_duration_minutes', decimalMin || '');
+                    setDurationDisplay(decimalMin ? minutesToDisplay(decimalMin) : e.target.value);
+                  }}
                   className="input-field"
                 />
                 {durationDelta !== null && (
                   <p className={`text-xs mt-1 ${durationDelta <= 0 ? 'text-green-400' : 'text-yellow-400'}`}>
-                    {durationDelta >= 0 ? '+' : ''}{durationDelta}min vs planned
+                    {durationDelta >= 0 ? '+' : ''}{Math.round(Math.abs(durationDelta))}min vs planned
                   </p>
                 )}
               </div>

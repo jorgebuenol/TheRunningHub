@@ -231,7 +231,7 @@ export default function MyPlanPage() {
           <h2 className="font-display text-xl sm:text-2xl text-volt">{todayWorkout.title}</h2>
           <div className="flex flex-wrap gap-3 sm:gap-6 mt-3">
             {todayWorkout.distance_km && <span className="text-lg font-bold">{todayWorkout.distance_km}km</span>}
-            {todayWorkout.duration_minutes && <span className="text-smoke">{todayWorkout.duration_minutes} min</span>}
+            {todayWorkout.duration_minutes && <span className="text-smoke">{formatTime(Math.round(todayWorkout.duration_minutes * 60))}</span>}
             {todayWorkout.pace_range_min && todayWorkout.pace_range_max && (
               <span className="text-smoke">{formatPace(todayWorkout.pace_range_min)}-{formatPace(todayWorkout.pace_range_max)} /km</span>
             )}

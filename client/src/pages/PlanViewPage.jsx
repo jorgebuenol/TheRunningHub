@@ -589,7 +589,7 @@ export default function PlanViewPage() {
                             )}
                             {isExpanded && (
                               <div className="mt-2 pt-2 border-t border-ash/50 space-y-1">
-                                {workout.duration_minutes && <p className="text-smoke text-xs">{workout.duration_minutes} min</p>}
+                                {workout.duration_minutes && <p className="text-smoke text-xs">{formatTime(Math.round(workout.duration_minutes * 60))}</p>}
                                 {workout.description && <p className="text-smoke text-xs">{normalizeDescriptionPace(workout.description, workout)}</p>}
                                 {workout.coach_notes && <p className="text-volt/80 text-xs">Coach: {workout.coach_notes}</p>}
                                 {workout.intervals_detail && (
