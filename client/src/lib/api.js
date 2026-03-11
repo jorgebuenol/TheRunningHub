@@ -12,19 +12,36 @@ async function getAuthHeaders() {
 
 async function request(path, options = {}) {
   const headers = await getAuthHeaders();
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: { ...headers, ...options.headers },
-  });
+  const { timeout, ...fetchOptions } = options;
 
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ message: res.statusText }));
-    const err = new Error(error.message || 'API request failed');
-    if (error.missing_sections) err.missing_sections = error.missing_sections;
+  // AbortController for timeout (default 30s, AI calls get longer)
+  const controller = new AbortController();
+  const timeoutMs = timeout || 30000;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(`${API_URL}${path}`, {
+      ...fetchOptions,
+      headers: { ...headers, ...fetchOptions.headers },
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ message: res.statusText }));
+      const err = new Error(error.message || 'API request failed');
+      if (error.missing_sections) err.missing_sections = error.missing_sections;
+      throw err;
+    }
+
+    return res.json();
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('Request timed out. The AI is taking too long — try a smaller adjustment (e.g. one specific week).');
+    }
     throw err;
+  } finally {
+    clearTimeout(timer);
   }
-
-  return res.json();
 }
 
 export const api = {
@@ -40,9 +57,10 @@ export const api = {
   generatePlan: (athleteId, overrides = {}) => request(`/api/plans/generate/${athleteId}`, {
     method: 'POST',
     body: JSON.stringify(overrides),
+    timeout: 120000,
   }),
   getPlan: (planId) => request(`/api/plans/${planId}`),
-  generateWeekDetail: (planId, weekId) => request(`/api/plans/${planId}/weeks/${weekId}/generate`, { method: 'POST' }),
+  generateWeekDetail: (planId, weekId) => request(`/api/plans/${planId}/weeks/${weekId}/generate`, { method: 'POST', timeout: 120000 }),
   deletePlan: (planId) => request(`/api/plans/${planId}`, { method: 'DELETE' }),
   deleteWeek: (planId, weekId) => request(`/api/plans/${planId}/weeks/${weekId}`, { method: 'DELETE' }),
   getAthletePlans: (athleteId) => request(`/api/plans/athlete/${athleteId}`),
@@ -56,7 +74,7 @@ export const api = {
     request(`/api/plans/${planId}/apply-adjustments`, { method: 'POST', body: JSON.stringify({ adjustments }) }),
   getPlanVersions: (planId) => request(`/api/plans/${planId}/versions`),
   sendPlanReviewMessage: (planId, athleteId, message, history = []) =>
-    request('/api/chat/plan-review', { method: 'POST', body: JSON.stringify({ planId, athleteId, message, history }) }),
+    request('/api/chat/plan-review', { method: 'POST', body: JSON.stringify({ planId, athleteId, message, history }), timeout: 120000 }),
 
   // Intervals.icu
   syncToIntervals: (athleteId, planId) => request(`/api/intervals/push/${athleteId}/${planId}`, { method: 'POST' }),
@@ -90,5 +108,5 @@ export const api = {
 
   // AI Chat
   sendChatMessage: (athleteId, message, history = []) =>
-    request('/api/chat', { method: 'POST', body: JSON.stringify({ athleteId, message, history }) }),
+    request('/api/chat', { method: 'POST', body: JSON.stringify({ athleteId, message, history }), timeout: 120000 }),
 };

@@ -249,6 +249,10 @@ export default function PlanViewPage() {
       const history = chatMessages.map(m => ({ role: m.role, content: m.content }));
       const reply = await api.sendPlanReviewMessage(planId, plan.athlete_id, userMessage, history);
 
+      if (!reply?.content) {
+        throw new Error('Empty response from AI. Try a more specific request.');
+      }
+
       setChatMessages(prev => [...prev, { role: 'assistant', content: reply.content }]);
 
       // If adjustments were returned, add them to pending
@@ -256,7 +260,12 @@ export default function PlanViewPage() {
         setPendingAdjustments(prev => [...prev, ...reply.adjustments]);
       }
     } catch (err) {
-      setChatError(err.message);
+      setChatError(err.message || 'Something went wrong. Try again with a simpler request.');
+      // Remove the user message if it failed completely (no AI response)
+      setChatMessages(prev => prev.length > 0 && prev[prev.length - 1].role === 'user'
+        ? prev.slice(0, -1)
+        : prev
+      );
     } finally {
       setChatSending(false);
     }
@@ -267,9 +276,13 @@ export default function PlanViewPage() {
     try {
       const updated = await api.applyPlanAdjustments(planId, adjustmentsToApply);
       setPlan(updated);
-      // Remove applied adjustments from pending
-      const appliedIds = new Set(adjustmentsToApply.map(a => a.workout_id));
-      setPendingAdjustments(prev => prev.filter(a => !appliedIds.has(a.workout_id)));
+      // Remove applied adjustments from pending (handle both week_id and workout_id)
+      const appliedWorkoutIds = new Set(adjustmentsToApply.filter(a => a.workout_id).map(a => a.workout_id));
+      const appliedWeekIds = new Set(adjustmentsToApply.filter(a => a.week_id).map(a => a.week_id));
+      setPendingAdjustments(prev => prev.filter(a =>
+        !(a.workout_id && appliedWorkoutIds.has(a.workout_id)) &&
+        !(a.week_id && appliedWeekIds.has(a.week_id))
+      ));
       setChatMessages(prev => [...prev, {
         role: 'assistant',
         content: `Applied ${adjustmentsToApply.length} adjustment(s) to the plan.`,
@@ -281,16 +294,29 @@ export default function PlanViewPage() {
     }
   }
 
-  function dismissAdjustment(workoutId) {
-    setPendingAdjustments(prev => prev.filter(a => a.workout_id !== workoutId));
+  function dismissAdjustment(adj) {
+    setPendingAdjustments(prev => prev.filter(a =>
+      a.workout_id !== adj.workout_id || a.week_id !== adj.week_id
+    ));
   }
 
-  // Find workout info for an adjustment
-  function findWorkoutInfo(workoutId) {
+  // Find info for an adjustment — supports both workout_id and week_id
+  function findAdjustmentInfo(adj) {
     if (!plan?.plan_weeks) return null;
-    for (const week of plan.plan_weeks) {
-      const w = week.workouts?.find(wo => wo.id === workoutId);
-      if (w) return { week: week.week_number, day: DAY_NAMES[w.day_of_week], title: w.title, workout: w };
+
+    // Week-level adjustment (skeleton)
+    if (adj.week_id) {
+      const week = plan.plan_weeks.find(w => w.id === adj.week_id);
+      if (week) return { type: 'week', week: week.week_number, phase: week.phase, title: `Week ${week.week_number}`, source: week };
+      return null;
+    }
+
+    // Workout-level adjustment (generated)
+    if (adj.workout_id) {
+      for (const week of plan.plan_weeks) {
+        const w = week.workouts?.find(wo => wo.id === adj.workout_id);
+        if (w) return { type: 'workout', week: week.week_number, day: DAY_NAMES[w.day_of_week], title: w.title, source: w };
+      }
     }
     return null;
   }
@@ -755,7 +781,13 @@ export default function PlanViewPage() {
 
             {chatError && (
               <div className="bg-red-900/20 border border-red-500 px-3 py-2 text-red-300 text-xs">
-                {chatError}
+                <div className="flex items-start justify-between gap-2">
+                  <span>{chatError}</span>
+                  <button onClick={() => setChatError('')} className="text-red-400 hover:text-white flex-shrink-0">
+                    <X size={12} />
+                  </button>
+                </div>
+                <p className="text-red-400/60 text-[10px] mt-1">Tip: Try targeting specific weeks (e.g. "make week 3 easier") instead of entire phases.</p>
               </div>
             )}
 
@@ -778,20 +810,28 @@ export default function PlanViewPage() {
                 </button>
               </div>
               {pendingAdjustments.map((adj, i) => {
-                const info = findWorkoutInfo(adj.workout_id);
+                const info = findAdjustmentInfo(adj);
+                const label = info
+                  ? info.type === 'week'
+                    ? `W${info.week} — ${(info.phase || '').toUpperCase()}`
+                    : `W${info.week} ${info.day} — ${info.title}`
+                  : (adj.week_id || adj.workout_id || '').slice(0, 8);
                 return (
-                  <div key={i} className="border border-ash bg-steel/50 px-3 py-2 mb-2 text-xs">
+                  <div key={i} className={`border bg-steel/50 px-3 py-2 mb-2 text-xs ${
+                    info?.type === 'week' ? 'border-yellow-500/50' : 'border-ash'
+                  }`}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-white font-semibold">
-                        {info ? `W${info.week} ${info.day} — ${info.title}` : adj.workout_id.slice(0, 8)}
+                        {info?.type === 'week' && <span className="text-yellow-400 mr-1">WEEK</span>}
+                        {label}
                       </span>
-                      <button onClick={() => dismissAdjustment(adj.workout_id)} className="text-smoke hover:text-red-400">
+                      <button onClick={() => dismissAdjustment(adj)} className="text-smoke hover:text-red-400">
                         <X size={12} />
                       </button>
                     </div>
                     <div className="text-smoke space-y-0.5">
                       {Object.entries(adj.changes || {}).map(([key, val]) => {
-                        const oldVal = info?.workout?.[key];
+                        const oldVal = info?.source?.[key];
                         return (
                           <p key={key}>
                             <span className="text-smoke/70">{key}:</span>{' '}

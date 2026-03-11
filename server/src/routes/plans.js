@@ -408,6 +408,7 @@ planRoutes.post('/:planId/unpublish', coachOnly, async (req, res, next) => {
 });
 
 // POST apply AI-suggested adjustments to a draft plan
+// Supports both week-level (week_id → plan_weeks) and workout-level (workout_id → workouts) adjustments
 planRoutes.post('/:planId/apply-adjustments', coachOnly, async (req, res, next) => {
   try {
     const { planId } = req.params;
@@ -427,29 +428,48 @@ planRoutes.post('/:planId/apply-adjustments', coachOnly, async (req, res, next) 
     if (fetchErr || !plan) return res.status(404).json({ message: 'Plan not found' });
     if (plan.status !== 'draft') return res.status(409).json({ message: 'Can only adjust draft plans' });
 
-    // Apply each adjustment
+    const VALID_WEEK_FIELDS = ['km_target', 'phase', 'intensity', 'notes'];
     const affectedWeekIds = new Set();
+
     for (const adj of adjustments) {
-      if (!adj.workout_id || !adj.changes) continue;
+      if (!adj.changes) continue;
 
-      // Get the workout to find its week
-      const { data: workout } = await req.supabase
-        .from('workouts')
-        .select('plan_week_id')
-        .eq('id', adj.workout_id)
-        .single();
+      // Week-level adjustment (skeleton weeks)
+      if (adj.week_id) {
+        const weekChanges = {};
+        for (const [key, val] of Object.entries(adj.changes)) {
+          if (VALID_WEEK_FIELDS.includes(key)) weekChanges[key] = val;
+        }
+        if (Object.keys(weekChanges).length === 0) continue;
 
-      if (workout) affectedWeekIds.add(workout.plan_week_id);
+        const { error: updateErr } = await req.supabase
+          .from('plan_weeks')
+          .update(weekChanges)
+          .eq('id', adj.week_id)
+          .eq('plan_id', planId);
 
-      const { error: updateErr } = await req.supabase
-        .from('workouts')
-        .update(adj.changes)
-        .eq('id', adj.workout_id);
+        if (updateErr) throw updateErr;
+      }
+      // Workout-level adjustment (generated weeks)
+      else if (adj.workout_id) {
+        const { data: workout } = await req.supabase
+          .from('workouts')
+          .select('plan_week_id')
+          .eq('id', adj.workout_id)
+          .single();
 
-      if (updateErr) throw updateErr;
+        if (workout) affectedWeekIds.add(workout.plan_week_id);
+
+        const { error: updateErr } = await req.supabase
+          .from('workouts')
+          .update(adj.changes)
+          .eq('id', adj.workout_id);
+
+        if (updateErr) throw updateErr;
+      }
     }
 
-    // Recalculate total_km for affected weeks
+    // Recalculate total_km for affected weeks (workout-level changes only)
     for (const weekId of affectedWeekIds) {
       const { data: weekWorkouts } = await req.supabase
         .from('workouts')

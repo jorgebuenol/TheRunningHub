@@ -165,25 +165,28 @@ export async function sendChatMessage(supabase, athleteId, message, history = []
 }
 
 /**
- * Build context for plan review chat — includes athlete profile + full plan
+ * Build context for plan review chat — includes athlete profile + full plan.
+ * For large plans (10+ weeks), uses a condensed format to keep context manageable.
  */
 export async function buildPlanReviewContext(supabase, athleteId, planId) {
-  // Fetch athlete
-  const { data: athlete } = await supabase
-    .from('athletes')
-    .select('*, profiles(full_name, email)')
-    .eq('id', athleteId)
-    .single();
+  // Fetch athlete and plan in parallel
+  const [athleteRes, planRes] = await Promise.all([
+    supabase
+      .from('athletes')
+      .select('*, profiles(full_name, email)')
+      .eq('id', athleteId)
+      .single(),
+    supabase
+      .from('training_plans')
+      .select('*, plan_weeks(*, workouts(*))')
+      .eq('id', planId)
+      .single(),
+  ]);
 
+  const athlete = athleteRes.data;
   if (!athlete) return 'Athlete not found.';
 
-  // Fetch full plan with weeks and workouts
-  const { data: plan } = await supabase
-    .from('training_plans')
-    .select('*, plan_weeks(*, workouts(*))')
-    .eq('id', planId)
-    .single();
-
+  const plan = planRes.data;
   if (!plan) return 'Plan not found.';
 
   // Sort weeks and workouts
@@ -193,6 +196,14 @@ export async function buildPlanReviewContext(supabase, athleteId, planId) {
       if (week.workouts) week.workouts.sort((a, b) => a.day_of_week - b.day_of_week);
     }
   }
+
+  const weeks = plan.plan_weeks || [];
+  const generatedWeeks = weeks.filter(w => w.is_generated);
+  const skeletonWeeks = weeks.filter(w => !w.is_generated);
+  const totalWorkouts = generatedWeeks.reduce((sum, w) => sum + (w.workouts?.length || 0), 0);
+  const isLargePlan = totalWorkouts > 50;
+  // Plan is mostly skeleton if more un-generated weeks than generated
+  const isMostlySkeleton = skeletonWeeks.length > generatedWeeks.length;
 
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const parts = [];
@@ -219,33 +230,66 @@ export async function buildPlanReviewContext(supabase, athleteId, planId) {
   // Full plan
   parts.push(`\n## TRAINING PLAN: ${plan.name}`);
   parts.push(`Status: ${plan.status} | ${plan.total_weeks} weeks | Version ${plan.version || 1}`);
+  parts.push(`Generated weeks: ${generatedWeeks.length} | Skeleton weeks: ${skeletonWeeks.length} | Total workouts: ${totalWorkouts}`);
 
-  for (const week of plan.plan_weeks || []) {
-    parts.push(`\n### WEEK ${week.week_number} — ${(week.phase || '').toUpperCase()} (${week.total_km}km)`);
-    if (week.notes) parts.push(`Focus: ${week.notes}`);
+  for (const week of weeks) {
+    const generated = week.is_generated;
+    const kmLabel = generated ? week.total_km : week.km_target;
+    parts.push(`\n### WEEK ${week.week_number} — ${(week.phase || '').toUpperCase()} (${kmLabel}km) [${generated ? 'GENERATED' : 'SKELETON'}]`);
+    parts.push(`  week_id:${week.id} | km_target:${week.km_target} | intensity:${week.intensity || 'N/A'}`);
+    if (week.notes) parts.push(`  Focus: ${week.notes}`);
 
-    for (const w of week.workouts || []) {
-      let line = `  ${dayNames[w.day_of_week] || '?'} | id:${w.id} | ${w.workout_type} | ${w.title}`;
-      if (w.distance_km) line += ` | ${w.distance_km}km`;
-      if (w.duration_minutes) line += ` | ${w.duration_minutes}min`;
-      if (w.pace_range_min && w.pace_range_max) line += ` | ${formatPace(w.pace_range_min)}-${formatPace(w.pace_range_max)}/km`;
-      if (w.hr_zone) line += ` | ${w.hr_zone}`;
-      if (w.coach_notes) line += ` | Notes: ${w.coach_notes}`;
-      if (w.intervals_detail) line += ` | Intervals: ${JSON.stringify(w.intervals_detail)}`;
-      parts.push(line);
+    if (generated && week.workouts?.length) {
+      for (const w of week.workouts) {
+        let line = `  ${dayNames[w.day_of_week] || '?'} | id:${w.id} | ${w.workout_type} | ${w.title}`;
+        if (w.distance_km) line += ` | ${w.distance_km}km`;
+        if (w.duration_minutes) line += ` | ${w.duration_minutes}min`;
+        if (w.pace_range_min && w.pace_range_max) line += ` | ${formatPace(w.pace_range_min)}-${formatPace(w.pace_range_max)}/km`;
+        if (w.hr_zone) line += ` | ${w.hr_zone}`;
+        if (!isLargePlan) {
+          if (w.coach_notes) line += ` | Notes: ${w.coach_notes}`;
+          if (w.intervals_detail) line += ` | Intervals: ${JSON.stringify(w.intervals_detail)}`;
+        }
+        parts.push(line);
+      }
     }
   }
 
+  // Different instructions based on plan state
   parts.push(`\n## INSTRUCTIONS`);
   parts.push(`You are reviewing this training plan with the coach. Provide specific, data-driven advice.
-When the coach requests changes to the plan, provide your reasoning AND include a structured JSON block with the exact workout modifications.
+When the coach requests changes, provide your reasoning AND include a structured JSON block with the modifications.
 
-Format modifications like this:
+This plan has TWO types of weeks:
+- **SKELETON weeks**: High-level plan only (phase, km_target, intensity). No workouts yet. Use "week_id" to adjust these.
+- **GENERATED weeks**: Full workout details. Use "workout_id" to adjust individual workouts.
+
+${isMostlySkeleton ? `This plan is mostly in SKELETON state. The coach is likely adjusting the macro plan structure (weekly km targets, phases, intensity). Use week-level adjustments.\n\n` : ''}For SKELETON week adjustments (changing the macro plan):
 \`\`\`json
 {
   "adjustments": [
     {
-      "workout_id": "the-exact-uuid-from-the-plan-above",
+      "week_id": "the-exact-week-uuid-from-above",
+      "changes": {
+        "km_target": 45,
+        "phase": "build",
+        "intensity": "moderate",
+        "notes": "Adjusted per coach request"
+      }
+    }
+  ]
+}
+\`\`\`
+Valid week fields: km_target, phase, intensity, notes.
+Valid phases: base, build, peak, taper, race, base_recovery, build_recovery, peak_recovery.
+Valid intensities: easy, moderate, hard, recovery.
+
+For GENERATED week adjustments (changing individual workouts):
+\`\`\`json
+{
+  "adjustments": [
+    {
+      "workout_id": "the-exact-workout-uuid-from-above",
       "changes": {
         "distance_km": 6,
         "pace_target_sec_km": 330,
@@ -255,17 +299,21 @@ Format modifications like this:
   ]
 }
 \`\`\`
+Valid workout fields: distance_km, duration_minutes, pace_target_sec_km, pace_range_min, pace_range_max, hr_zone, title, description, workout_type, coach_notes, intervals_detail.
 
-IMPORTANT: Always use the exact workout_id values from the plan data above. Only include fields that change.
-Valid fields: distance_km, duration_minutes, pace_target_sec_km, pace_range_min, pace_range_max, hr_zone, title, description, workout_type, coach_notes, intervals_detail.
-
+IMPORTANT:
+- Use the exact week_id or workout_id values from the plan data above.
+- Do NOT mix week_id and workout_id in the same adjustment object.
+- Only include fields that change.
+${isLargePlan ? `- This is a large plan. Split into BATCHES of max 15 adjustments per JSON block. Say "continue" for more.\n` : ''}
 Answer in the language the coach writes to you in (likely Spanish or English).`);
 
   return parts.join('\n');
 }
 
 /**
- * Send a plan review chat message
+ * Send a plan review chat message.
+ * Uses higher max_tokens for large plans and includes a server-side timeout.
  */
 export async function sendPlanReviewMessage(supabase, athleteId, planId, message, history = []) {
   const context = await buildPlanReviewContext(supabase, athleteId, planId);
@@ -275,12 +323,22 @@ export async function sendPlanReviewMessage(supabase, athleteId, planId, message
     { role: 'user', content: message },
   ];
 
-  const response = await getAnthropic().messages.create({
+  // Larger max_tokens for plans with many adjustments
+  const maxTokens = context.length > 15000 ? 8000 : 4000;
+
+  // Wrap Anthropic call in a timeout to prevent hanging
+  const apiPromise = getAnthropic().messages.create({
     model: 'claude-sonnet-4-20250514',
-    max_tokens: 4000,
+    max_tokens: maxTokens,
     system: context,
     messages,
   });
+
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('AI response timed out. Try a more specific request like "adjust week 3" instead of an entire phase.')), 90000)
+  );
+
+  const response = await Promise.race([apiPromise, timeoutPromise]);
 
   const text = response.content[0].text;
   const adjustments = parseAdjustments(text);

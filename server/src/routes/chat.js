@@ -40,6 +40,12 @@ chatRoutes.post('/plan-review', coachOnly, async (req, res, next) => {
     if (msg.includes('credit balance')) {
       return res.status(402).json({ message: 'Anthropic API credits exhausted. Please add credits at console.anthropic.com.' });
     }
+    if (msg.includes('timed out')) {
+      return res.status(504).json({ message: msg });
+    }
+    if (msg.includes('overloaded') || msg.includes('529')) {
+      return res.status(503).json({ message: 'AI service is temporarily overloaded. Please try again in a moment.' });
+    }
     next(err);
   }
 });
