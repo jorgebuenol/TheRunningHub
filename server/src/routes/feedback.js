@@ -42,11 +42,17 @@ feedbackRoutes.post('/', async (req, res, next) => {
 
     if (error) throw error;
 
-    // Also mark the workout as completed if feedback says so
+    // Also mark the workout as completed and copy actuals to workouts table
     if (feedbackData.completed) {
       await req.supabase
         .from('workouts')
-        .update({ status: 'completed' })
+        .update({
+          status: 'completed',
+          actual_distance_km: feedbackData.actual_distance_km,
+          actual_duration_minutes: feedbackData.actual_duration_minutes,
+          actual_avg_pace: feedbackData.actual_pace_sec_km,
+          actual_avg_hr: feedbackData.avg_hr,
+        })
         .eq('id', body.workout_id);
     }
 

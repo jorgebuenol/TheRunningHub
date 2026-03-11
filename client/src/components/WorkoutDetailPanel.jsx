@@ -112,22 +112,22 @@ export default function WorkoutDetailPanel({ workout, athlete, isCoach, planStat
               <CompareItem
                 label="Distance"
                 planned={workout.distance_km ? `${workout.distance_km}km` : '--'}
-                actual={workout.actual_distance_km ? `${workout.actual_distance_km}km` : '--'}
+                actual={(workout.actual_distance_km || feedback?.actual_distance_km) ? `${workout.actual_distance_km || feedback.actual_distance_km}km` : '--'}
               />
               <CompareItem
                 label="Duration"
                 planned={workout.duration_minutes ? `${workout.duration_minutes}m` : '--'}
-                actual={workout.actual_duration_minutes ? `${workout.actual_duration_minutes}m` : '--'}
+                actual={(workout.actual_duration_minutes || feedback?.actual_duration_minutes) ? `${workout.actual_duration_minutes || feedback.actual_duration_minutes}m` : '--'}
               />
               <CompareItem
                 label="Avg Pace"
                 planned={formatPace(workout.pace_target_sec_km)}
-                actual={formatPace(workout.actual_avg_pace)}
+                actual={formatPace(workout.actual_avg_pace || feedback?.actual_pace_sec_km)}
               />
               <CompareItem
                 label="Avg HR"
                 planned={workout.hr_zone || '--'}
-                actual={workout.actual_avg_hr ? `${workout.actual_avg_hr}bpm` : '--'}
+                actual={(workout.actual_avg_hr || feedback?.avg_hr) ? `${workout.actual_avg_hr || feedback.avg_hr}bpm` : '--'}
               />
             </div>
 
