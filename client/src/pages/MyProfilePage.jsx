@@ -543,17 +543,17 @@ function RunningHistoryFields({ athlete, updateField, vdot, paces }) {
       <p className="text-smoke text-xs uppercase tracking-wider">Race Times (enter at least one)</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {[
-          { field: 'time_5k', label: '5K' },
-          { field: 'time_10k', label: '10K' },
-          { field: 'time_half_marathon', label: 'Half Marathon' },
-          { field: 'time_marathon', label: 'Marathon' },
-        ].map(({ field, label }) => (
+          { field: 'time_5k', label: '5K', ph: 'MM:SS' },
+          { field: 'time_10k', label: '10K', ph: 'MM:SS' },
+          { field: 'time_half_marathon', label: 'Half Marathon', ph: 'H:MM:SS' },
+          { field: 'time_marathon', label: 'Marathon', ph: 'H:MM:SS' },
+        ].map(({ field, label, ph }) => (
           <div key={field}>
             <FieldLabel>{label}</FieldLabel>
             <TimeInput
               value={athlete[field]}
               onChange={seconds => updateField(field, seconds)}
-              placeholder="MM:SS"
+              placeholder={ph}
             />
           </div>
         ))}
