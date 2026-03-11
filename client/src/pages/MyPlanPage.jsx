@@ -6,7 +6,8 @@ import { api } from '../lib/api';
 import { formatPace, formatTime, normalizeDescriptionPace } from '../lib/vdot';
 import WorkoutFeedbackModal from '../components/athletes/WorkoutFeedbackModal';
 import WorkoutDetailPanel from '../components/WorkoutDetailPanel';
-import { Calendar, Check, Zap, MessageSquare, ClipboardCheck, BarChart3, User } from 'lucide-react';
+import StrengthSessionModal from '../components/StrengthSessionModal';
+import { Calendar, Check, Zap, MessageSquare, ClipboardCheck, BarChart3, User, Dumbbell } from 'lucide-react';
 import { getOverallProgress } from '@shared/onboardingProgress';
 
 const WORKOUT_COLORS = {
@@ -40,6 +41,9 @@ export default function MyPlanPage() {
   const [selectedWorkout, setSelectedWorkout] = useState(null);
   const [todayCheckedIn, setTodayCheckedIn] = useState(null);
   const [workoutFeedbacks, setWorkoutFeedbacks] = useState({});
+  const [strengthSessions, setStrengthSessions] = useState([]);
+  const [showStrengthModal, setShowStrengthModal] = useState(false);
+  const [editingStrength, setEditingStrength] = useState(null);
 
   useEffect(() => {
     loadMyData();
@@ -112,6 +116,14 @@ export default function MyPlanPage() {
         }
         setWorkoutFeedbacks(fbMap);
       }
+
+      // Load strength sessions for the week (always, even without a plan)
+      const now = new Date();
+      const mon = getMonday(now);
+      const sun = new Date(mon);
+      sun.setDate(sun.getDate() + 6);
+      const sessions = await api.getStrengthSessions(athleteData.id, toLocalDateStr(mon), toLocalDateStr(sun)).catch(() => []);
+      setStrengthSessions(sessions || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -158,6 +170,19 @@ export default function MyPlanPage() {
 
   const today = toLocalDateStr(new Date());
   const todayWorkout = thisWeekWorkouts.find(w => w.workout_date === today);
+
+  // Build strength lookup by date
+  const strengthByDate = {};
+  for (const s of strengthSessions) { strengthByDate[s.session_date] = s; }
+  const todayStrength = strengthByDate[today];
+
+  // Compute date string for each day slot (Mon=0 .. Sun=6)
+  const monday = getMonday(new Date());
+  const weekDateStrs = DAY_NAMES.map((_, i) => {
+    const d = new Date(monday);
+    d.setDate(d.getDate() + i);
+    return toLocalDateStr(d);
+  });
 
   return (
     <div>
@@ -257,48 +282,70 @@ export default function MyPlanPage() {
         </div>
       )}
 
+      {/* Today's strength session */}
+      {todayStrength && (
+        <div
+          className="border-l-4 border-purple-500 bg-purple-500/10 p-4 sm:p-6 mb-6 sm:mb-8 cursor-pointer hover:bg-purple-500/15 transition-colors"
+          onClick={() => { setEditingStrength(todayStrength); setShowStrengthModal(true); }}
+        >
+          <p className="text-smoke text-xs uppercase tracking-wider mb-1">TODAY — STRENGTH</p>
+          <div className="flex items-center gap-3">
+            <Dumbbell size={20} className="text-purple-400" />
+            <span className="text-lg font-bold text-purple-400">{todayStrength.duration_minutes}min</span>
+            <span className="text-purple-300 capitalize">{todayStrength.intensity}</span>
+          </div>
+        </div>
+      )}
+
       {/* This week */}
-      <h2 className="font-display text-xl mb-4">THIS WEEK</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-display text-xl">THIS WEEK</h2>
+        <button
+          onClick={() => { setEditingStrength(null); setShowStrengthModal(true); }}
+          className="px-3 py-2 border border-purple-500 text-purple-400 hover:bg-purple-500/20 text-xs uppercase font-bold tracking-wider transition-colors flex items-center gap-1"
+        >
+          <Dumbbell size={14} /> Strength
+        </button>
+      </div>
 
       {/* Mobile: stacked list */}
       <div className="sm:hidden space-y-2 mb-8">
         {DAY_NAMES.map((day, i) => {
-          const workout = thisWeekWorkouts.find(w => {
-            const d = new Date(w.workout_date + 'T00:00:00');
-            return d.getDay() === (i === 6 ? 0 : i + 1);
-          });
+          const dateStr = weekDateStrs[i];
+          const workout = thisWeekWorkouts.find(w => w.workout_date === dateStr);
+          const strength = strengthByDate[dateStr];
 
-          const isToday = workout?.workout_date === today;
+          const isTodayRow = dateStr === today;
           const colors = workout ? (WORKOUT_COLORS[workout.workout_type] || 'border-ash bg-ash/20') : 'border-ash/50';
           const hasFeedback = workout && workoutFeedbacks[workout.id];
 
           return (
-            <div
-              key={i}
-              className={`border-l-4 p-3 ${colors} ${isToday ? 'ring-1 ring-volt' : ''} flex items-center justify-between gap-3 ${workout ? 'cursor-pointer hover:bg-white/5 transition-colors' : ''}`}
-              onClick={() => workout && setSelectedWorkout(workout)}
-            >
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <p className={`text-xs font-bold w-8 flex-shrink-0 ${isToday ? 'text-volt' : 'text-smoke'}`}>{day}</p>
-                {workout ? (
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs font-bold uppercase truncate">{workout.title}</p>
-                      {workout.distance_km && <span className="text-volt text-xs font-display flex-shrink-0">{workout.distance_km}KM</span>}
+            <div key={i} className="space-y-0.5">
+              <div
+                className={`border-l-4 p-3 ${colors} ${isTodayRow ? 'ring-1 ring-volt' : ''} flex items-center justify-between gap-3 ${workout ? 'cursor-pointer hover:bg-white/5 transition-colors' : ''}`}
+                onClick={() => workout && setSelectedWorkout(workout)}
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <p className={`text-xs font-bold w-8 flex-shrink-0 ${isTodayRow ? 'text-volt' : 'text-smoke'}`}>{day}</p>
+                  {workout ? (
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-bold uppercase truncate">{workout.title}</p>
+                        {workout.distance_km && <span className="text-volt text-xs font-display flex-shrink-0">{workout.distance_km}KM</span>}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {workout.status === 'completed' && (
+                          <span className="text-green-400 text-[10px] font-semibold">DONE</span>
+                        )}
+                        {hasFeedback && (
+                          <span className="text-volt text-[10px]">RPE {hasFeedback.rpe}</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {workout.status === 'completed' && (
-                        <span className="text-green-400 text-[10px] font-semibold">DONE</span>
-                      )}
-                      {hasFeedback && (
-                        <span className="text-volt text-[10px]">RPE {hasFeedback.rpe}</span>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-smoke/50 text-xs">Rest</p>
-                )}
-              </div>
+                  ) : (
+                    <p className="text-smoke/50 text-xs">Rest</p>
+                  )}
+                </div>
               {workout && (
                 <div className="flex gap-2 flex-shrink-0">
                   {workout.status !== 'completed' && (
@@ -315,6 +362,18 @@ export default function MyPlanPage() {
                 </div>
               )}
             </div>
+              {strength && (
+                <div
+                  onClick={() => { setEditingStrength(strength); setShowStrengthModal(true); }}
+                  className="border-l-4 border-purple-500 bg-purple-500/10 p-2 flex items-center gap-2 cursor-pointer hover:bg-purple-500/15 transition-colors"
+                >
+                  <Dumbbell size={12} className="text-purple-400" />
+                  <span className="text-purple-400 text-xs font-bold uppercase">Strength</span>
+                  <span className="text-white text-xs">{strength.duration_minutes}min</span>
+                  <span className="text-purple-300 text-xs capitalize">{strength.intensity}</span>
+                </div>
+              )}
+            </div>
           );
         })}
       </div>
@@ -322,22 +381,21 @@ export default function MyPlanPage() {
       {/* Desktop: 7 column grid */}
       <div className="hidden sm:grid grid-cols-7 gap-2 mb-8">
         {DAY_NAMES.map((day, i) => {
-          const workout = thisWeekWorkouts.find(w => {
-            const d = new Date(w.workout_date + 'T00:00:00');
-            return d.getDay() === (i === 6 ? 0 : i + 1);
-          });
+          const dateStr = weekDateStrs[i];
+          const workout = thisWeekWorkouts.find(w => w.workout_date === dateStr);
+          const strength = strengthByDate[dateStr];
 
-          const isToday = workout?.workout_date === today;
+          const isTodayCol = dateStr === today;
           const colors = workout ? (WORKOUT_COLORS[workout.workout_type] || 'border-ash bg-ash/20') : 'border-ash/50';
           const hasFeedback = workout && workoutFeedbacks[workout.id];
 
           return (
             <div
               key={i}
-              className={`border-l-4 p-3 min-h-[140px] ${colors} ${isToday ? 'ring-1 ring-volt' : ''} ${workout ? 'cursor-pointer hover:bg-white/5 transition-colors' : ''}`}
+              className={`border-l-4 p-3 min-h-[140px] ${colors} ${isTodayCol ? 'ring-1 ring-volt' : ''} ${workout ? 'cursor-pointer hover:bg-white/5 transition-colors' : ''}`}
               onClick={() => workout && setSelectedWorkout(workout)}
             >
-              <p className={`text-xs font-bold mb-2 ${isToday ? 'text-volt' : 'text-smoke'}`}>{day}</p>
+              <p className={`text-xs font-bold mb-2 ${isTodayCol ? 'text-volt' : 'text-smoke'}`}>{day}</p>
               {workout ? (
                 <>
                   <p className="text-xs font-bold uppercase">{workout.title}</p>
@@ -370,6 +428,22 @@ export default function MyPlanPage() {
                 </>
               ) : (
                 <p className="text-smoke/50 text-xs">—</p>
+              )}
+
+              {/* Strength session block */}
+              {strength && (
+                <div
+                  onClick={(e) => { e.stopPropagation(); setEditingStrength(strength); setShowStrengthModal(true); }}
+                  className="mt-2 bg-purple-500/20 border-l-2 border-purple-500 px-2 py-1 cursor-pointer hover:bg-purple-500/30 transition-colors"
+                >
+                  <div className="flex items-center gap-1">
+                    <Dumbbell size={10} className="text-purple-400" />
+                    <span className="text-purple-400 text-[10px] font-bold uppercase">STR</span>
+                  </div>
+                  <p className="text-white text-[10px] mt-0.5">
+                    {strength.duration_minutes}m <span className="text-purple-300 capitalize">{strength.intensity}</span>
+                  </p>
+                </div>
               )}
             </div>
           );
@@ -413,6 +487,20 @@ export default function MyPlanPage() {
           workout={feedbackWorkout}
           onClose={() => setFeedbackWorkout(null)}
           onSaved={loadMyData}
+        />
+      )}
+
+      {/* Strength Session Modal */}
+      {showStrengthModal && (
+        <StrengthSessionModal
+          initialDate={today}
+          existingSession={editingStrength}
+          onClose={() => { setShowStrengthModal(false); setEditingStrength(null); }}
+          onSaved={() => {
+            setShowStrengthModal(false);
+            setEditingStrength(null);
+            loadMyData();
+          }}
         />
       )}
 

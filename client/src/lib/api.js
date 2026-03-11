@@ -79,6 +79,15 @@ export const api = {
   getMonitoring: (athleteId) => request(`/api/monitoring/${athleteId}`),
   getProgress: (athleteId) => request(`/api/monitoring/${athleteId}/progress`),
 
+  // Strength Sessions
+  createStrengthSession: (data) => request('/api/strength', { method: 'POST', body: JSON.stringify(data) }),
+  getStrengthSessions: (athleteId, start, end) => {
+    let url = `/api/strength/athlete/${athleteId}`;
+    if (start && end) url += `?start=${start}&end=${end}`;
+    return request(url);
+  },
+  deleteStrengthSession: (id) => request(`/api/strength/${id}`, { method: 'DELETE' }),
+
   // AI Chat
   sendChatMessage: (athleteId, message, history = []) =>
     request('/api/chat', { method: 'POST', body: JSON.stringify({ athleteId, message, history }) }),

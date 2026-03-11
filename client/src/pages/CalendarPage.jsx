@@ -5,9 +5,10 @@ import { formatPace, formatTime } from '../lib/vdot';
 import { useAuth } from '../context/AuthContext';
 import WorkoutFeedbackModal from '../components/athletes/WorkoutFeedbackModal';
 import WorkoutDetailPanel from '../components/WorkoutDetailPanel';
+import StrengthSessionModal from '../components/StrengthSessionModal';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Check, X, Edit3, Save,
-  Calendar as CalendarIcon, LayoutGrid, Flag, MessageSquare,
+  Calendar as CalendarIcon, LayoutGrid, Flag, MessageSquare, Dumbbell,
 } from 'lucide-react';
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval,
@@ -49,6 +50,10 @@ export default function CalendarPage() {
   const [editForm, setEditForm] = useState({});
   const [feedbackWorkout, setFeedbackWorkout] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [strengthSessions, setStrengthSessions] = useState([]);
+  const [showStrengthModal, setShowStrengthModal] = useState(false);
+  const [strengthModalDate, setStrengthModalDate] = useState(null);
+  const [editingStrength, setEditingStrength] = useState(null);
 
   /* ─── Data loading ─── */
   useEffect(() => { loadData(); }, [paramAthleteId]);
@@ -69,6 +74,10 @@ export default function CalendarPage() {
 
       const monData = await api.getMonitoring(athleteData.id).catch(() => null);
       setMonitoring(monData);
+
+      // Load strength sessions
+      const sessions = await api.getStrengthSessions(athleteData.id).catch(() => []);
+      setStrengthSessions(sessions || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -89,6 +98,15 @@ export default function CalendarPage() {
     }
     return map;
   }, [plan]);
+
+  /* ─── Build strength session lookup by date ─── */
+  const strengthByDate = useMemo(() => {
+    const map = {};
+    for (const s of strengthSessions) {
+      map[s.session_date] = s;
+    }
+    return map;
+  }, [strengthSessions]);
 
   /* ─── Week helpers ─── */
   const getWeekStart = useCallback((date) => {
@@ -274,6 +292,14 @@ export default function CalendarPage() {
               <Flag size={14} /> Race Day
             </button>
           )}
+          {!isCoach && (
+            <button
+              onClick={() => { setStrengthModalDate(null); setEditingStrength(null); setShowStrengthModal(true); }}
+              className="px-3 py-2 border border-purple-500 text-purple-400 hover:bg-purple-500/20 text-xs uppercase font-bold tracking-wider transition-colors flex items-center gap-1 min-h-[44px]"
+            >
+              <Dumbbell size={14} /> Strength
+            </button>
+          )}
         </div>
       </div>
 
@@ -407,6 +433,30 @@ export default function CalendarPage() {
                 ) : (
                   <p className="text-smoke/50 text-xs uppercase mt-4">Rest</p>
                 )}
+
+                {/* Strength session block */}
+                {strengthByDate[key] && (
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!isCoach) {
+                        setEditingStrength(strengthByDate[key]);
+                        setStrengthModalDate(key);
+                        setShowStrengthModal(true);
+                      }
+                    }}
+                    className="mt-2 bg-purple-500/20 border-l-2 border-purple-500 px-2 py-1.5 cursor-pointer hover:bg-purple-500/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-1">
+                      <Dumbbell size={10} className="text-purple-400" />
+                      <span className="text-purple-400 text-[10px] font-bold uppercase">Strength</span>
+                    </div>
+                    <p className="text-white text-xs mt-0.5">
+                      {strengthByDate[key].duration_minutes}min
+                      <span className="text-purple-300 ml-1 capitalize">{strengthByDate[key].intensity}</span>
+                    </p>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -460,6 +510,18 @@ export default function CalendarPage() {
                       {workout.status === 'completed' && (
                         <Check size={8} className="text-green-400 mt-0.5 hidden sm:block" />
                       )}
+                    </div>
+                  )}
+
+                  {strengthByDate[key] && (
+                    <div className="bg-purple-500/20 border-l-2 border-purple-500 px-0.5 sm:px-1.5 py-0.5 sm:py-1 mt-0.5">
+                      <div className="flex items-center gap-0.5">
+                        <Dumbbell size={8} className="text-purple-400" />
+                        <span className="text-[8px] sm:text-[10px] font-bold uppercase text-purple-400">STR</span>
+                      </div>
+                      <p className="text-white text-[8px] sm:text-[10px] hidden sm:block">
+                        {strengthByDate[key].duration_minutes}m
+                      </p>
                     </div>
                   )}
                 </div>
@@ -601,6 +663,20 @@ export default function CalendarPage() {
           onClose={() => setFeedbackWorkout(null)}
           onSaved={() => {
             setFeedbackWorkout(null);
+            loadData();
+          }}
+        />
+      )}
+
+      {/* ─── Strength Session Modal ─── */}
+      {showStrengthModal && (
+        <StrengthSessionModal
+          initialDate={strengthModalDate}
+          existingSession={editingStrength}
+          onClose={() => { setShowStrengthModal(false); setEditingStrength(null); }}
+          onSaved={() => {
+            setShowStrengthModal(false);
+            setEditingStrength(null);
             loadData();
           }}
         />

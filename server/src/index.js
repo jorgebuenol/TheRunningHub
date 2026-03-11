@@ -15,6 +15,7 @@ import { readinessRoutes } from './routes/readiness.js';
 import { feedbackRoutes } from './routes/feedback.js';
 import { monitoringRoutes } from './routes/monitoring.js';
 import { chatRoutes } from './routes/chat.js';
+import { strengthRoutes } from './routes/strength.js';
 import { authMiddleware } from './middleware/auth.js';
 
 const app = express();
@@ -41,6 +42,7 @@ app.use('/api/readiness', authMiddleware, readinessRoutes);
 app.use('/api/feedback', authMiddleware, feedbackRoutes);
 app.use('/api/monitoring', authMiddleware, monitoringRoutes);
 app.use('/api/chat', authMiddleware, chatRoutes);
+app.use('/api/strength', authMiddleware, strengthRoutes);
 
 // Error handler
 app.use((err, _req, res, _next) => {
