@@ -98,7 +98,7 @@ export default function AthleteLoadPage() {
         ) : (
           <p className="text-smoke text-lg font-display">
             {acwr.insufficient_data
-              ? 'ACWR no disponible — se activa después de 3 semanas de entrenamiento'
+              ? 'ACWR unavailable — activates after 3 weeks of training'
               : 'NO DATA'}
           </p>
         )}

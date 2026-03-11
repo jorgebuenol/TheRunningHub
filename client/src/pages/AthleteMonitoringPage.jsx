@@ -82,7 +82,7 @@ export default function AthleteMonitoringPage() {
           </p>
           <p className="text-smoke text-xs mt-1">
             {acwr.insufficient_data
-              ? 'Se activa después de 3 semanas'
+              ? 'Activates after 3 weeks'
               : `Acute: ${acwr.acute_km}km | Chronic: ${acwr.chronic_km}km/wk`}
           </p>
         </div>

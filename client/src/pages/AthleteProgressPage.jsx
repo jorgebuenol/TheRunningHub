@@ -17,10 +17,10 @@ function formatPace(secPerKm) {
   return `${min}:${String(sec).padStart(2, '0')}`;
 }
 
-const PACE_TREND_ES = {
-  improving: { label: 'MEJORANDO', color: '#CCFF00', msg: 'Tu ritmo fácil está bajando. ¡Vas más rápido!' },
-  stable: { label: 'ESTABLE', color: '#888', msg: 'Tu ritmo se mantiene consistente.' },
-  declining: { label: 'SUBIENDO', color: '#F87171', msg: 'Tu ritmo fácil está subiendo. Puede ser fatiga acumulada.' },
+const PACE_TREND = {
+  improving: { label: 'IMPROVING', color: '#CCFF00', msg: 'Your easy pace is dropping. Getting faster!' },
+  stable: { label: 'STABLE', color: '#888', msg: 'Your pace is holding steady.' },
+  declining: { label: 'RISING', color: '#F87171', msg: 'Your easy pace is rising. Could be accumulated fatigue.' },
 };
 
 const TYPE_COLORS = {
@@ -33,14 +33,14 @@ const TYPE_COLORS = {
   race: '#CCFF00',
 };
 
-const TYPE_LABELS_ES = {
-  easy: 'Fácil',
-  threshold: 'Umbral',
-  intervals: 'Intervalos',
-  long_run: 'Largo',
-  rest: 'Descanso',
+const TYPE_LABELS = {
+  easy: 'Easy',
+  threshold: 'Threshold',
+  intervals: 'Intervals',
+  long_run: 'Long Run',
+  rest: 'Rest',
   cross_training: 'Cross Training',
-  race: 'Carrera',
+  race: 'Race',
 };
 
 export default function AthleteProgressPage() {
@@ -60,23 +60,23 @@ export default function AthleteProgressPage() {
       .finally(() => setLoading(false));
   }, [user]);
 
-  if (loading) return <div className="text-volt font-display text-xl animate-pulse">CARGANDO...</div>;
-  if (!data?.plan) return <div className="text-smoke text-center py-12">No tienes un plan activo.</div>;
+  if (loading) return <div className="text-volt font-display text-xl animate-pulse">LOADING...</div>;
+  if (!data?.plan) return <div className="text-smoke text-center py-12">You don't have an active plan.</div>;
 
   const { plan, adherence, weekly_volume, easy_pace_trend, pace_trend_label, weekly_rpe, rpe_overreaching, type_breakdown, total_km_cycle, weeks_to_race } = data;
 
   return (
     <div>
-      <h1 className="font-display text-3xl sm:text-4xl text-volt mb-1">MI PROGRESO</h1>
+      <h1 className="font-display text-3xl sm:text-4xl text-volt mb-1">MY PROGRESS</h1>
       <p className="text-smoke uppercase tracking-wider text-sm mb-8">
-        {plan.goal_race} — Semana {plan.current_week || '?'} de {plan.total_weeks}
+        {plan.goal_race} — Week {plan.current_week || '?'} of {plan.total_weeks}
       </p>
 
       {/* ─── Hero Number: Total KM ─── */}
       <div className="border-2 border-volt bg-volt/5 p-6 mb-6 text-center">
-        <p className="text-smoke text-xs uppercase tracking-wider mb-2">Kilómetros en este ciclo</p>
+        <p className="text-smoke text-xs uppercase tracking-wider mb-2">Total km this cycle</p>
         <p className="font-display text-6xl sm:text-7xl text-volt leading-none">{total_km_cycle}</p>
-        <p className="text-smoke text-sm mt-2 uppercase tracking-wider">km recorridos</p>
+        <p className="text-smoke text-sm mt-2 uppercase tracking-wider">km completed</p>
       </div>
 
       {/* ─── Streak + Countdown Cards ─── */}
@@ -88,7 +88,7 @@ export default function AthleteProgressPage() {
             {adherence.streak}
           </p>
           <p className="text-smoke text-xs uppercase tracking-wider mt-1">
-            semana{adherence.streak !== 1 ? 's' : ''} consecutiva{adherence.streak !== 1 ? 's' : ''}
+            week{adherence.streak !== 1 ? 's' : ''} in a row
           </p>
         </div>
 
@@ -99,13 +99,13 @@ export default function AthleteProgressPage() {
             <>
               <p className="font-display text-4xl text-white">{weeks_to_race}</p>
               <p className="text-smoke text-xs uppercase tracking-wider mt-1">
-                semana{weeks_to_race !== 1 ? 's' : ''} para tu carrera
+                week{weeks_to_race !== 1 ? 's' : ''} until race day
               </p>
             </>
           ) : (
             <>
               <p className="font-display text-2xl text-smoke">—</p>
-              <p className="text-smoke text-xs uppercase tracking-wider mt-1">sin fecha de carrera</p>
+              <p className="text-smoke text-xs uppercase tracking-wider mt-1">no race date set</p>
             </>
           )}
         </div>
@@ -115,9 +115,9 @@ export default function AthleteProgressPage() {
       <div className="card mb-6">
         <h2 className="font-display text-xl mb-1 flex items-center gap-2">
           <Flame size={18} className="text-volt" />
-          KM POR SEMANA
+          WEEKLY KM
         </h2>
-        <p className="text-smoke text-xs mb-4">Últimas 8 semanas</p>
+        <p className="text-smoke text-xs mb-4">Last 8 weeks</p>
         {weekly_volume.some(w => w.completed_km > 0) ? (
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={weekly_volume} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
@@ -126,14 +126,14 @@ export default function AthleteProgressPage() {
               <YAxis tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE} />
               <Tooltip
                 contentStyle={{ background: '#111', border: '1px solid #333', fontSize: 12, fontFamily: 'Barlow Condensed' }}
-                formatter={(v) => [`${v} km`, 'Completado']}
+                formatter={(v) => [`${v} km`, 'Completed']}
                 labelStyle={{ color: '#888' }}
               />
               <Bar dataKey="completed_km" fill="#CCFF00" radius={[0, 0, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <p className="text-smoke text-sm py-8 text-center">Aún no hay datos de volumen.</p>
+          <p className="text-smoke text-sm py-8 text-center">No volume data yet.</p>
         )}
       </div>
 
@@ -141,9 +141,9 @@ export default function AthleteProgressPage() {
       <div className="card mb-6">
         <h2 className="font-display text-xl mb-1 flex items-center gap-2">
           <TrendingUp size={18} className="text-volt" />
-          PROGRESIÓN DE RITMO
+          PACE PROGRESSION
         </h2>
-        <p className="text-smoke text-xs mb-4">Ritmo fácil promedio — últimas 8 semanas</p>
+        <p className="text-smoke text-xs mb-4">Average easy pace — last 8 weeks</p>
         {easy_pace_trend?.some(w => w.avg_pace_sec_km) ? (
           <>
             <ResponsiveContainer width="100%" height={240}>
@@ -163,7 +163,7 @@ export default function AthleteProgressPage() {
                 />
                 <Tooltip
                   contentStyle={{ background: '#111', border: '1px solid #333', fontSize: 12, fontFamily: 'Barlow Condensed' }}
-                  formatter={(v) => [formatPace(v), 'Ritmo']}
+                  formatter={(v) => [formatPace(v), 'Pace']}
                   labelStyle={{ color: '#888' }}
                 />
                 <Line
@@ -181,20 +181,20 @@ export default function AthleteProgressPage() {
                 <span
                   className="font-display text-sm px-2 py-0.5"
                   style={{
-                    color: PACE_TREND_ES[pace_trend_label]?.color || '#888',
-                    border: `1px solid ${PACE_TREND_ES[pace_trend_label]?.color || '#333'}`,
+                    color: PACE_TREND[pace_trend_label]?.color || '#888',
+                    border: `1px solid ${PACE_TREND[pace_trend_label]?.color || '#333'}`,
                   }}
                 >
-                  {PACE_TREND_ES[pace_trend_label]?.label || pace_trend_label}
+                  {PACE_TREND[pace_trend_label]?.label || pace_trend_label}
                 </span>
                 <span className="text-smoke text-xs">
-                  {PACE_TREND_ES[pace_trend_label]?.msg}
+                  {PACE_TREND[pace_trend_label]?.msg}
                 </span>
               </div>
             )}
           </>
         ) : (
-          <p className="text-smoke text-sm py-8 text-center">Aún no hay datos de ritmo fácil.</p>
+          <p className="text-smoke text-sm py-8 text-center">No easy pace data yet.</p>
         )}
       </div>
 
@@ -202,9 +202,9 @@ export default function AthleteProgressPage() {
       <div className="card mb-6">
         <h2 className="font-display text-xl mb-1 flex items-center gap-2">
           <Activity size={18} className="text-volt" />
-          ESFUERZO PERCIBIDO (RPE)
+          PERCEIVED EFFORT (RPE)
         </h2>
-        <p className="text-smoke text-xs mb-4">RPE promedio por semana — últimas 8 semanas</p>
+        <p className="text-smoke text-xs mb-4">Average RPE per week — last 8 weeks</p>
         {weekly_rpe?.some(w => w.avg_rpe) ? (
           <>
             <ResponsiveContainer width="100%" height={240}>
@@ -238,20 +238,20 @@ export default function AthleteProgressPage() {
             <div className="mt-3">
               {rpe_overreaching ? (
                 <div className="flex items-center gap-2 border border-red-500/50 bg-red-500/10 px-3 py-2">
-                  <span className="font-display text-sm text-red-400">ATENCIÓN</span>
-                  <span className="text-smoke text-xs">Tu RPE está subiendo pero tu ritmo no mejora. Posible sobreentrenamiento — considera un descanso.</span>
+                  <span className="font-display text-sm text-red-400">WARNING</span>
+                  <span className="text-smoke text-xs">Your RPE is rising but your pace isn't improving. Possible overtraining — consider a rest week.</span>
                 </div>
               ) : (
                 <p className="text-smoke text-xs">
                   {pace_trend_label === 'improving'
-                    ? 'Tu esfuerzo se mantiene mientras tu ritmo mejora. ¡Excelente adaptación!'
-                    : 'Tu esfuerzo percibido está en rango normal.'}
+                    ? 'Same effort, faster pace. Great adaptation!'
+                    : 'Your perceived effort is in normal range.'}
                 </p>
               )}
             </div>
           </>
         ) : (
-          <p className="text-smoke text-sm py-8 text-center">Aún no hay datos de RPE.</p>
+          <p className="text-smoke text-sm py-8 text-center">No RPE data yet.</p>
         )}
       </div>
 
@@ -260,10 +260,10 @@ export default function AthleteProgressPage() {
         <div className="card mb-6">
           <h2 className="font-display text-xl mb-1 flex items-center gap-2">
             <PieIcon size={18} className="text-volt" />
-            TU ENTRENAMIENTO
+            YOUR TRAINING
           </h2>
           <p className="text-smoke text-xs mb-4">
-            Distribución en fase {type_breakdown.phase?.replace('_', ' ')}
+            Distribution in {type_breakdown.phase?.replace('_', ' ')} phase
           </p>
           <div className="flex flex-col items-center gap-4">
             <AthleteDonut breakdown={type_breakdown} />
@@ -277,7 +277,7 @@ export default function AthleteProgressPage() {
                   return (
                     <div key={type} className="flex items-center gap-2 px-3 py-1 border border-ash bg-steel/50">
                       <span className="w-3 h-3 flex-shrink-0" style={{ backgroundColor: TYPE_COLORS[type] || '#666' }} />
-                      <span className="text-xs text-white font-semibold">{TYPE_LABELS_ES[type] || type}</span>
+                      <span className="text-xs text-white font-semibold">{TYPE_LABELS[type] || type}</span>
                       <span className="text-xs text-smoke">{pct}%</span>
                     </div>
                   );
@@ -291,20 +291,20 @@ export default function AthleteProgressPage() {
       <div className="card mb-6">
         <h2 className="font-display text-xl mb-4 flex items-center gap-2">
           <Target size={18} className="text-volt" />
-          ADHERENCIA
+          ADHERENCE
         </h2>
         <div className="grid grid-cols-2 gap-4">
           <div className="text-center">
             <p className="font-display text-3xl text-volt">
               {adherence.this_week.rate != null ? `${adherence.this_week.rate}%` : '—'}
             </p>
-            <p className="text-smoke text-xs uppercase">esta semana</p>
+            <p className="text-smoke text-xs uppercase">this week</p>
           </div>
           <div className="text-center">
             <p className="font-display text-3xl text-white">
               {adherence.all_time.rate != null ? `${adherence.all_time.rate}%` : '—'}
             </p>
-            <p className="text-smoke text-xs uppercase">total del plan</p>
+            <p className="text-smoke text-xs uppercase">plan total</p>
           </div>
         </div>
       </div>
@@ -315,10 +315,10 @@ export default function AthleteProgressPage() {
 function AthleteDonut({ breakdown }) {
   const entries = Object.entries(breakdown).filter(([k]) => k !== 'phase');
   const total = entries.reduce((s, [, v]) => s + v, 0);
-  if (total === 0) return <p className="text-smoke text-sm">Sin datos</p>;
+  if (total === 0) return <p className="text-smoke text-sm">No data</p>;
 
   const chartData = entries.map(([type, count]) => ({
-    name: TYPE_LABELS_ES[type] || type,
+    name: TYPE_LABELS[type] || type,
     value: count,
     color: TYPE_COLORS[type] || '#666',
   }));
@@ -343,7 +343,7 @@ function AthleteDonut({ breakdown }) {
           </Pie>
           <Tooltip
             contentStyle={{ background: '#111', border: '1px solid #333', fontSize: 12 }}
-            formatter={(v, name) => [`${v} sesiones`, name]}
+            formatter={(v, name) => [`${v} sessions`, name]}
           />
         </PieChart>
       </ResponsiveContainer>
