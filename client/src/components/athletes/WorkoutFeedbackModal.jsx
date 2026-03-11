@@ -65,7 +65,9 @@ export default function WorkoutFeedbackModal({ workout, onClose, onSaved }) {
         completed: form.completed,
         actual_distance_km: form.actual_distance_km ? parseFloat(form.actual_distance_km) : null,
         actual_duration_minutes: form.actual_duration_minutes ? parseInt(form.actual_duration_minutes) : null,
-        actual_pace_sec_km: form.actual_pace_sec_km ? parseInt(form.actual_pace_sec_km) : null,
+        actual_pace_sec_km: form.actual_distance_km && form.actual_duration_minutes
+          ? Math.round((parseFloat(form.actual_duration_minutes) * 60) / parseFloat(form.actual_distance_km))
+          : null,
         avg_hr: form.avg_hr ? parseInt(form.avg_hr) : null,
         max_hr: form.max_hr ? parseInt(form.max_hr) : null,
         feeling: form.feeling,

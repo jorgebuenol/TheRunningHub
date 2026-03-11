@@ -122,7 +122,13 @@ export default function WorkoutDetailPanel({ workout, athlete, isCoach, planStat
               <CompareItem
                 label="Avg Pace"
                 planned={formatPace(workout.pace_target_sec_km)}
-                actual={formatPace(workout.actual_avg_pace || feedback?.actual_pace_sec_km)}
+                actual={formatPace(
+                  workout.actual_avg_pace
+                  || feedback?.actual_pace_sec_km
+                  || (feedback?.actual_distance_km && feedback?.actual_duration_minutes
+                    ? Math.round((feedback.actual_duration_minutes * 60) / feedback.actual_distance_km)
+                    : null)
+                )}
               />
               <CompareItem
                 label="Avg HR"
