@@ -1,14 +1,27 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
-import { Flame, Award, Calendar, Target, PieChart as PieIcon } from 'lucide-react';
+import { Flame, Award, Calendar, Target, PieChart as PieIcon, TrendingUp, Activity } from 'lucide-react';
 import {
-  BarChart, Bar, PieChart, Pie, Cell,
+  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 
 const AXIS_TICK = { fill: '#888', fontSize: 11, fontFamily: 'Barlow Condensed' };
 const AXIS_LINE = { stroke: '#333' };
+
+function formatPace(secPerKm) {
+  if (!secPerKm) return '—:——';
+  const min = Math.floor(secPerKm / 60);
+  const sec = secPerKm % 60;
+  return `${min}:${String(sec).padStart(2, '0')}`;
+}
+
+const PACE_TREND_ES = {
+  improving: { label: 'MEJORANDO', color: '#CCFF00', msg: 'Tu ritmo fácil está bajando. ¡Vas más rápido!' },
+  stable: { label: 'ESTABLE', color: '#888', msg: 'Tu ritmo se mantiene consistente.' },
+  declining: { label: 'SUBIENDO', color: '#F87171', msg: 'Tu ritmo fácil está subiendo. Puede ser fatiga acumulada.' },
+};
 
 const TYPE_COLORS = {
   easy: '#4ADE80',
@@ -50,7 +63,7 @@ export default function AthleteProgressPage() {
   if (loading) return <div className="text-volt font-display text-xl animate-pulse">CARGANDO...</div>;
   if (!data?.plan) return <div className="text-smoke text-center py-12">No tienes un plan activo.</div>;
 
-  const { plan, adherence, weekly_volume, type_breakdown, total_km_cycle, weeks_to_race } = data;
+  const { plan, adherence, weekly_volume, easy_pace_trend, pace_trend_label, weekly_rpe, rpe_overreaching, type_breakdown, total_km_cycle, weeks_to_race } = data;
 
   return (
     <div>
@@ -121,6 +134,124 @@ export default function AthleteProgressPage() {
           </ResponsiveContainer>
         ) : (
           <p className="text-smoke text-sm py-8 text-center">Aún no hay datos de volumen.</p>
+        )}
+      </div>
+
+      {/* ─── Pace Progression ─── */}
+      <div className="card mb-6">
+        <h2 className="font-display text-xl mb-1 flex items-center gap-2">
+          <TrendingUp size={18} className="text-volt" />
+          PROGRESIÓN DE RITMO
+        </h2>
+        <p className="text-smoke text-xs mb-4">Ritmo fácil promedio — últimas 8 semanas</p>
+        {easy_pace_trend?.some(w => w.avg_pace_sec_km) ? (
+          <>
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart
+                data={easy_pace_trend.filter(w => w.avg_pace_sec_km)}
+                margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                <XAxis dataKey="label" tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE} />
+                <YAxis
+                  reversed
+                  domain={['dataMin - 10', 'dataMax + 10']}
+                  tick={AXIS_TICK}
+                  axisLine={AXIS_LINE}
+                  tickLine={AXIS_LINE}
+                  tickFormatter={formatPace}
+                />
+                <Tooltip
+                  contentStyle={{ background: '#111', border: '1px solid #333', fontSize: 12, fontFamily: 'Barlow Condensed' }}
+                  formatter={(v) => [formatPace(v), 'Ritmo']}
+                  labelStyle={{ color: '#888' }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="avg_pace_sec_km"
+                  stroke="#CCFF00"
+                  strokeWidth={2}
+                  dot={{ fill: '#CCFF00', r: 4 }}
+                  activeDot={{ r: 6, fill: '#CCFF00' }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+            {pace_trend_label && (
+              <div className="mt-3 flex items-center gap-2">
+                <span
+                  className="font-display text-sm px-2 py-0.5"
+                  style={{
+                    color: PACE_TREND_ES[pace_trend_label]?.color || '#888',
+                    border: `1px solid ${PACE_TREND_ES[pace_trend_label]?.color || '#333'}`,
+                  }}
+                >
+                  {PACE_TREND_ES[pace_trend_label]?.label || pace_trend_label}
+                </span>
+                <span className="text-smoke text-xs">
+                  {PACE_TREND_ES[pace_trend_label]?.msg}
+                </span>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-smoke text-sm py-8 text-center">Aún no hay datos de ritmo fácil.</p>
+        )}
+      </div>
+
+      {/* ─── RPE Trend ─── */}
+      <div className="card mb-6">
+        <h2 className="font-display text-xl mb-1 flex items-center gap-2">
+          <Activity size={18} className="text-volt" />
+          ESFUERZO PERCIBIDO (RPE)
+        </h2>
+        <p className="text-smoke text-xs mb-4">RPE promedio por semana — últimas 8 semanas</p>
+        {weekly_rpe?.some(w => w.avg_rpe) ? (
+          <>
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart
+                data={weekly_rpe.filter(w => w.avg_rpe)}
+                margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                <XAxis dataKey="label" tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE} />
+                <YAxis
+                  domain={[1, 10]}
+                  tick={AXIS_TICK}
+                  axisLine={AXIS_LINE}
+                  tickLine={AXIS_LINE}
+                />
+                <Tooltip
+                  contentStyle={{ background: '#111', border: '1px solid #333', fontSize: 12, fontFamily: 'Barlow Condensed' }}
+                  formatter={(v) => [v, 'RPE']}
+                  labelStyle={{ color: '#888' }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="avg_rpe"
+                  stroke="#CCFF00"
+                  strokeWidth={2}
+                  dot={{ fill: '#CCFF00', r: 4 }}
+                  activeDot={{ r: 6, fill: '#CCFF00' }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+            <div className="mt-3">
+              {rpe_overreaching ? (
+                <div className="flex items-center gap-2 border border-red-500/50 bg-red-500/10 px-3 py-2">
+                  <span className="font-display text-sm text-red-400">ATENCIÓN</span>
+                  <span className="text-smoke text-xs">Tu RPE está subiendo pero tu ritmo no mejora. Posible sobreentrenamiento — considera un descanso.</span>
+                </div>
+              ) : (
+                <p className="text-smoke text-xs">
+                  {pace_trend_label === 'improving'
+                    ? 'Tu esfuerzo se mantiene mientras tu ritmo mejora. ¡Excelente adaptación!'
+                    : 'Tu esfuerzo percibido está en rango normal.'}
+                </p>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-smoke text-sm py-8 text-center">Aún no hay datos de RPE.</p>
         )}
       </div>
 
