@@ -266,3 +266,47 @@ athleteRoutes.patch('/:id', async (req, res, next) => {
     next(err);
   }
 });
+
+// DELETE athlete (coach only) — cascade deletes all related data
+athleteRoutes.delete('/:id', coachOnly, async (req, res, next) => {
+  try {
+    const athleteId = req.params.id;
+
+    // 1. Fetch athlete to get profile_id
+    const { data: athlete, error: fetchErr } = await req.supabase
+      .from('athletes')
+      .select('id, profile_id, profiles(full_name)')
+      .eq('id', athleteId)
+      .single();
+
+    if (fetchErr || !athlete) {
+      return res.status(404).json({ message: 'Athlete not found' });
+    }
+
+    const profileId = athlete.profile_id;
+
+    // 2. Delete athletes row — CASCADE handles training_plans, plan_weeks, workouts, feedback, readiness
+    const { error: deleteErr } = await req.supabase
+      .from('athletes')
+      .delete()
+      .eq('id', athleteId);
+
+    if (deleteErr) throw deleteErr;
+
+    // 3. Delete profile row
+    await req.supabase
+      .from('profiles')
+      .delete()
+      .eq('id', profileId);
+
+    // 4. Delete auth user account
+    const { error: authErr } = await req.supabase.auth.admin.deleteUser(profileId);
+    if (authErr) {
+      console.warn(`Athlete data deleted but auth user removal failed: ${authErr.message}`);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});

@@ -34,6 +34,7 @@ export const api = {
   getMyProfile: () => request('/api/athletes/me'),
   createAthlete: (data) => request('/api/athletes', { method: 'POST', body: JSON.stringify(data) }),
   updateAthlete: (id, data) => request(`/api/athletes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteAthlete: (id) => request(`/api/athletes/${id}`, { method: 'DELETE' }),
 
   // Training Plans
   generatePlan: (athleteId, overrides = {}) => request(`/api/plans/generate/${athleteId}`, {

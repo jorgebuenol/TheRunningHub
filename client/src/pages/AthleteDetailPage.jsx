@@ -7,7 +7,7 @@ import {
   Zap, Calendar, Target, TrendingUp, RefreshCw, Send, ArrowLeft,
   Activity, Shield, AlertTriangle, CheckCircle, Circle, CircleDot,
   User, Heart, Moon, Apple, Briefcase, Dumbbell, Smartphone, MessageSquare, BarChart3,
-  X,
+  X, Trash2,
 } from 'lucide-react';
 
 // ─── Athlete level derivation (mirrors server logic) ───────────────────────
@@ -100,6 +100,10 @@ export default function AthleteDetailPage() {
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState('');
   const [monitoring, setMonitoring] = useState(null);
+
+  // Delete athlete state
+  const [confirmDeleteAthlete, setConfirmDeleteAthlete] = useState(false);
+  const [deletingAthlete, setDeletingAthlete] = useState(false);
 
   // Pre-generation modal state
   const [showGenModal, setShowGenModal] = useState(false);
@@ -273,6 +277,13 @@ export default function AthleteDetailPage() {
         <button disabled className="btn-ghost flex items-center gap-2 opacity-50 cursor-not-allowed" title="Coming soon">
           <Send size={16} />
           MESSAGE ATHLETE
+        </button>
+        <button
+          onClick={() => setConfirmDeleteAthlete(true)}
+          className="btn-ghost flex items-center gap-2 text-red-400 hover:text-red-300"
+        >
+          <Trash2 size={16} />
+          DELETE ATHLETE
         </button>
       </div>
 
@@ -566,6 +577,49 @@ export default function AthleteDetailPage() {
               <RefreshCw size={14} />
               PULL ACTIVITIES
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Delete Athlete Confirmation ─── */}
+      {confirmDeleteAthlete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+          <div className="bg-carbon border border-red-500/50 border-l-4 border-l-red-500 p-6 max-w-md w-full mx-4">
+            <h3 className="font-display text-lg text-white mb-2">DELETE ATHLETE</h3>
+            <p className="text-smoke text-sm mb-1">
+              Delete <span className="text-white font-semibold">{athlete.profiles?.full_name}</span>?
+            </p>
+            <p className="text-red-400/70 text-xs mb-6">
+              This permanently removes their profile, training plans, workouts, and all data. This cannot be undone.
+            </p>
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                onClick={() => setConfirmDeleteAthlete(false)}
+                disabled={deletingAthlete}
+                className="btn-ghost px-4 py-2 text-sm"
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={async () => {
+                  setDeletingAthlete(true);
+                  try {
+                    await api.deleteAthlete(id);
+                    navigate('/athletes');
+                  } catch (err) {
+                    setMessage(`Error: ${err.message}`);
+                    setConfirmDeleteAthlete(false);
+                  } finally {
+                    setDeletingAthlete(false);
+                  }
+                }}
+                disabled={deletingAthlete}
+                className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 text-sm font-bold uppercase tracking-wider flex items-center gap-2 transition-colors"
+              >
+                <Trash2 size={14} />
+                {deletingAthlete ? 'DELETING...' : 'DELETE'}
+              </button>
+            </div>
           </div>
         </div>
       )}

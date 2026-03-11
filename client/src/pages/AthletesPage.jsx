@@ -1,20 +1,24 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
-import { Plus, Search, ChevronRight } from 'lucide-react';
+import { Plus, Search, ChevronRight, Trash2 } from 'lucide-react';
 import { formatPace } from '../lib/vdot';
 
 export default function AthletesPage() {
   const [athletes, setAthletes] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
+  function loadAthletes() {
     api.getAthletes()
       .then(setAthletes)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(() => { loadAthletes(); }, []);
 
   const filtered = athletes.filter(a =>
     a.profiles?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -79,8 +83,15 @@ export default function AthletesPage() {
                 <span className="text-smoke text-xs uppercase">No Plan</span>
               )}
             </div>
-            <div className="text-right">
-              <ChevronRight size={18} className="text-smoke group-hover:text-volt transition-colors inline" />
+            <div className="text-right flex items-center justify-end gap-2">
+              <button
+                onClick={e => { e.preventDefault(); e.stopPropagation(); setDeleteTarget(athlete); }}
+                className="text-smoke/30 hover:text-red-400 transition-colors p-1"
+                title="Delete athlete"
+              >
+                <Trash2 size={14} />
+              </button>
+              <ChevronRight size={18} className="text-smoke group-hover:text-volt transition-colors" />
             </div>
           </Link>
         ))}
@@ -115,7 +126,16 @@ export default function AthletesPage() {
                 )}
               </div>
             </div>
-            <ChevronRight size={18} className="text-smoke group-hover:text-volt transition-colors flex-shrink-0" />
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={e => { e.preventDefault(); e.stopPropagation(); setDeleteTarget(athlete); }}
+                className="text-smoke/30 hover:text-red-400 transition-colors p-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                title="Delete athlete"
+              >
+                <Trash2 size={16} />
+              </button>
+              <ChevronRight size={18} className="text-smoke group-hover:text-volt transition-colors" />
+            </div>
           </Link>
         ))}
 
@@ -125,6 +145,48 @@ export default function AthletesPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="bg-carbon border border-red-500/50 border-l-4 border-l-red-500 p-6 max-w-md w-full">
+            <h3 className="font-display text-xl text-red-400 mb-3">DELETE ATHLETE</h3>
+            <p className="text-smoke text-sm leading-relaxed mb-6">
+              Delete <span className="text-white font-semibold">{deleteTarget.profiles?.full_name}</span>?
+              This permanently removes their profile, training plans, workouts, and all data.
+              This cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="btn-ghost"
+                disabled={deleting}
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    await api.deleteAthlete(deleteTarget.id);
+                    setDeleteTarget(null);
+                    loadAthletes();
+                  } catch (err) {
+                    console.error('Delete failed:', err);
+                    alert('Failed to delete athlete: ' + err.message);
+                  } finally {
+                    setDeleting(false);
+                  }
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-semibold text-sm transition-colors disabled:opacity-50"
+                disabled={deleting}
+              >
+                {deleting ? 'DELETING...' : 'DELETE'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
