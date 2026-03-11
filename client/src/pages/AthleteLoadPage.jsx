@@ -11,6 +11,7 @@ const ZONE = {
   green:  { text: 'text-green-400', bg: 'bg-green-500/20', border: 'border-green-500', label: 'OPTIMAL', fill: '#4ADE80' },
   yellow: { text: 'text-yellow-400', bg: 'bg-yellow-500/20', border: 'border-yellow-500', label: 'CAUTION', fill: '#FACC15' },
   red:    { text: 'text-red-400', bg: 'bg-red-500/20', border: 'border-red-500', label: 'DANGER', fill: '#F87171' },
+  insufficient: { text: 'text-smoke', bg: 'bg-smoke/10', border: 'border-ash', label: 'INSUFFICIENT DATA', fill: '#888' },
 };
 
 const chartTooltipStyle = {
@@ -40,7 +41,7 @@ export default function AthleteLoadPage() {
 
   const { acwr, weekly_km_history, rpe_7d_trend, readiness_7d_trend, flags } = monitoring;
   const zone = ZONE[acwr.zone] || ZONE.green;
-  const hasData = acwr.acute_km > 0 || acwr.chronic_km > 0;
+  const hasData = !acwr.insufficient_data && (acwr.acute_km > 0 || acwr.chronic_km > 0);
 
   return (
     <div>
@@ -95,7 +96,11 @@ export default function AthleteLoadPage() {
             </div>
           </>
         ) : (
-          <p className="text-smoke text-lg font-display">NO DATA</p>
+          <p className="text-smoke text-lg font-display">
+            {acwr.insufficient_data
+              ? 'ACWR no disponible — se activa después de 3 semanas de entrenamiento'
+              : 'NO DATA'}
+          </p>
         )}
       </div>
 

@@ -140,7 +140,8 @@ export async function getAthleteProgress(supabase, athleteId) {
       .reduce((s, wo) => s + parseFloat(wo.actual_distance_km || wo.distance_km || 0), 0);
 
     const chronicWeekly = chronic28 / 4;
-    weekBuckets[i].acwr = chronicWeekly > 0 ? round1(acute7 / chronicWeekly) : null;
+    // Suppress ACWR when chronic load is too low (< 5 km/wk) to avoid false alerts
+    weekBuckets[i].acwr = chronicWeekly >= 5 ? round1(acute7 / chronicWeekly) : null;
   }
 
   // --- Adherence ---

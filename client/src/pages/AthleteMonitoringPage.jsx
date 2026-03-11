@@ -4,8 +4,8 @@ import { api } from '../lib/api';
 import Sparkline from '../components/ui/Sparkline';
 import { ArrowLeft, AlertTriangle, TrendingUp, Activity, Heart, Shield } from 'lucide-react';
 
-const ACWR_COLORS = { green: 'text-green-400', yellow: 'text-yellow-400', red: 'text-red-400' };
-const ACWR_BG = { green: 'bg-green-500/10 border-green-500', yellow: 'bg-yellow-500/10 border-yellow-500', red: 'bg-red-500/10 border-red-500' };
+const ACWR_COLORS = { green: 'text-green-400', yellow: 'text-yellow-400', red: 'text-red-400', insufficient: 'text-smoke' };
+const ACWR_BG = { green: 'bg-green-500/10 border-green-500', yellow: 'bg-yellow-500/10 border-yellow-500', red: 'bg-red-500/10 border-red-500', insufficient: 'bg-smoke/10 border-ash' };
 const FEELING_EMOJI = { great: '😄', good: '😊', ok: '😐', bad: '😟', terrible: '😫' };
 
 export default function AthleteMonitoringPage() {
@@ -77,9 +77,13 @@ export default function AthleteMonitoringPage() {
             <Shield size={16} className={ACWR_COLORS[acwr.zone]} />
             <p className="text-smoke text-xs uppercase">ACWR</p>
           </div>
-          <p className={`font-display text-3xl ${ACWR_COLORS[acwr.zone]}`}>{acwr.ratio}</p>
+          <p className={`font-display text-3xl ${ACWR_COLORS[acwr.zone] || 'text-smoke'}`}>
+            {acwr.insufficient_data ? '--' : acwr.ratio}
+          </p>
           <p className="text-smoke text-xs mt-1">
-            Acute: {acwr.acute_km}km | Chronic: {acwr.chronic_km}km/wk
+            {acwr.insufficient_data
+              ? 'Se activa después de 3 semanas'
+              : `Acute: ${acwr.acute_km}km | Chronic: ${acwr.chronic_km}km/wk`}
           </p>
         </div>
 

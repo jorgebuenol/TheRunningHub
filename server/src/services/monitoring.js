@@ -13,6 +13,8 @@ export function calculateACWR(workouts) {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const twentyEightDaysAgo = new Date(now);
   twentyEightDaysAgo.setDate(twentyEightDaysAgo.getDate() - 28);
+  const twentyOneDaysAgo = new Date(now);
+  twentyOneDaysAgo.setDate(twentyOneDaysAgo.getDate() - 21);
 
   const completed = workouts.filter(w =>
     w.status === 'completed' && w.distance_km > 0
@@ -29,14 +31,21 @@ export function calculateACWR(workouts) {
   const chronicTotalKm = chronicWorkouts.reduce((sum, w) => sum + parseFloat(w.distance_km || 0), 0);
   const chronicWeeklyKm = chronicTotalKm / 4;
 
-  if (chronicWeeklyKm === 0) {
-    return { ratio: acuteKm > 0 ? 2.0 : 0, zone: acuteKm > 0 ? 'red' : 'green', acute_km: round1(acuteKm), chronic_km: 0 };
+  // Check if athlete has enough training history (>= 3 weeks of data)
+  const hasThreeWeeksData = completed.some(w => new Date(w.workout_date) < twentyOneDaysAgo);
+
+  // Suppress ACWR when insufficient data or chronic load too low
+  if (!hasThreeWeeksData || chronicWeeklyKm < 5) {
+    return {
+      ratio: null, zone: 'insufficient', acute_km: round1(acuteKm), chronic_km: round1(chronicWeeklyKm),
+      insufficient_data: true,
+    };
   }
 
   const ratio = Math.round((acuteKm / chronicWeeklyKm) * 100) / 100;
   const zone = getACWRZone(ratio);
 
-  return { ratio, zone, acute_km: round1(acuteKm), chronic_km: round1(chronicWeeklyKm) };
+  return { ratio, zone, acute_km: round1(acuteKm), chronic_km: round1(chronicWeeklyKm), insufficient_data: false };
 }
 
 function getACWRZone(ratio) {
@@ -142,15 +151,21 @@ export async function getAthleteMonitoringSummary(supabase, athleteId) {
     ? Math.round((rpe7dValues.reduce((a, b) => a + b, 0) / rpe7dValues.length) * 10) / 10
     : null;
 
-  // Flags (updated criteria)
+  // Flags (updated criteria — suppress false positives for new athletes)
   const flags = [];
-  if (acwr.zone === 'red') flags.push({ type: 'acwr', message: `ACWR ${acwr.ratio} — ${acwr.ratio > 1.5 ? 'Very high' : 'Very low'} load` });
-  else if (acwr.zone === 'yellow') flags.push({ type: 'acwr_warning', message: `ACWR ${acwr.ratio} — ${acwr.ratio > 1.3 ? 'Elevated' : 'Low'} load` });
+  if (!acwr.insufficient_data) {
+    if (acwr.zone === 'red') flags.push({ type: 'acwr', message: `ACWR ${acwr.ratio} — ${acwr.ratio > 1.5 ? 'Very high' : 'Very low'} load` });
+    else if (acwr.zone === 'yellow') flags.push({ type: 'acwr_warning', message: `ACWR ${acwr.ratio} — ${acwr.ratio > 1.3 ? 'Elevated' : 'Low'} load` });
+  }
   if (todayReadiness?.composite_score < 2.5) flags.push({ type: 'readiness', message: 'Low readiness score today' });
   if (painFlags.length > 0) flags.push({ type: 'pain', message: `Pain: ${[...new Set(painFlags.map(p => p.pain_location))].join(', ')}` });
   const highRpeDays = rpe7dTrend.filter(d => d.rpe !== null && d.rpe > 8).length;
   if (highRpeDays >= 3) flags.push({ type: 'rpe', message: `High RPE (>8) for ${highRpeDays} of last 7 days` });
-  if (complianceRate !== null && complianceRate < 60) flags.push({ type: 'compliance', message: `Low compliance: ${complianceRate}%` });
+  // Only flag low compliance after at least 1 full week of planned workouts
+  const allPlannedWorkouts = workouts.filter(w => w.workout_type !== 'rest');
+  const oldestPlannedDate = allPlannedWorkouts.length > 0 ? new Date(allPlannedWorkouts[0].workout_date) : null;
+  const planHasFullWeek = oldestPlannedDate && (now - oldestPlannedDate) / 86400000 >= 7;
+  if (planHasFullWeek && complianceRate !== null && complianceRate < 60) flags.push({ type: 'compliance', message: `Low compliance: ${complianceRate}%` });
 
   return {
     acwr,
@@ -334,8 +349,9 @@ export async function getDashboardFlags(supabase, athleteId) {
     pain_flag: todayReadiness?.pain_flag || false,
     pain_flag_7d: painFlag7d,
     pain_location: todayReadiness?.pain_location || null,
-    acwr_ratio: acwr.ratio,
-    acwr_zone: acwr.zone,
+    acwr_ratio: acwr.insufficient_data ? null : acwr.ratio,
+    acwr_zone: acwr.insufficient_data ? null : acwr.zone,
+    acwr_insufficient: acwr.insufficient_data || false,
     avg_rpe: avgRpe,
     rpe_sparkline: rpeSparkline,
     rpe_high_days: rpeHighDays,

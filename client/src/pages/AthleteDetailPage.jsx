@@ -502,7 +502,8 @@ export default function AthleteDetailPage() {
               </p>
               <p className={`font-display text-xl ${
                 monitoring.acwr?.zone === 'green' ? 'text-green-400' :
-                monitoring.acwr?.zone === 'yellow' ? 'text-yellow-400' : 'text-red-400'
+                monitoring.acwr?.zone === 'yellow' ? 'text-yellow-400' :
+                monitoring.acwr?.zone === 'red' ? 'text-red-400' : 'text-smoke'
               }`}>
                 {monitoring.acwr?.ratio ?? '--'}
               </p>
