@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { api } from '../lib/api';
-import { formatPace, formatTime } from '../lib/vdot';
+import { formatPace, formatTime, normalizeDescriptionPace } from '../lib/vdot';
 import WorkoutFeedbackModal from '../components/athletes/WorkoutFeedbackModal';
 import WorkoutDetailPanel from '../components/WorkoutDetailPanel';
 import { Calendar, Check, Zap, MessageSquare, ClipboardCheck, BarChart3, User } from 'lucide-react';
@@ -231,7 +231,7 @@ export default function MyPlanPage() {
               <span className="text-smoke">{formatPace(todayWorkout.pace_range_min)}-{formatPace(todayWorkout.pace_range_max)} /km</span>
             )}
           </div>
-          {todayWorkout.description && <p className="text-sm mt-3">{todayWorkout.description}</p>}
+          {todayWorkout.description && <p className="text-sm mt-3">{normalizeDescriptionPace(todayWorkout.description, todayWorkout)}</p>}
           {todayWorkout.coach_notes && <p className="text-volt text-sm mt-2">Coach: {todayWorkout.coach_notes}</p>}
 
           <div className="flex flex-col sm:flex-row gap-3 mt-4">
