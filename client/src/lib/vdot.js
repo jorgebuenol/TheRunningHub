@@ -102,18 +102,20 @@ function velocityToPaceSecPerKm(v) {
 }
 
 /**
- * Calculate all training paces from VDOT.
+ * Calculate all training paces from VDOT with Bogotá altitude adjustment.
  * Returns paces in seconds per kilometer.
  *
- * Jack Daniels intensity zones (% of VO2max):
- *   Easy (E):        65–79%
- *   Marathon (M):    80–84%   → used as "Tempo" label
- *   Threshold (T):   86–88%   → lactate threshold
- *   Interval (I):    97–100%  → VO2max intervals
+ * Corrected Daniels intensity zones (% of VO2max):
+ *   Easy (E):        58–67%   (no altitude adjustment)
+ *   Tempo (M):       77%      (+altitude)
+ *   Threshold (T):   82%      (+altitude)
+ *   Race:            90%      (+altitude)
+ *   Interval (I):    97%      (+altitude)
  *
- * Keys use pace_ prefix to match DB column names.
+ * @param {number} vdot - VDOT value
+ * @param {number} altitudeAdjustSec - seconds/km to add for altitude (default 15 for Bogotá 2640m). Pass 0 for sea level.
  */
-export function getTrainingPaces(vdot) {
+export function getTrainingPaces(vdot, altitudeAdjustSec = 15) {
   if (!vdot || vdot <= 0) {
     return {
       pace_easy_min: 0, pace_easy_max: 0,
@@ -122,29 +124,20 @@ export function getTrainingPaces(vdot) {
     };
   }
 
-  // Easy range: 65–79% VO2max
-  const easySlowV = velocityAtIntensity(vdot, 0.65);
-  const easyFastV = velocityAtIntensity(vdot, 0.79);
+  // Easy range: 58–67% VO2max — NO altitude adjustment
+  const easySlowV = velocityAtIntensity(vdot, 0.58);
+  const easyFastV = velocityAtIntensity(vdot, 0.67);
 
-  // Marathon / Tempo: ~84% VO2max
-  const tempoV = velocityAtIntensity(vdot, 0.84);
-
-  // Threshold (T pace): ~88% VO2max — lactate threshold
-  const ltV = velocityAtIntensity(vdot, 0.88);
-
-  // Race pace: ~93% VO2max (roughly 10K–HM effort)
-  const raceV = velocityAtIntensity(vdot, 0.93);
-
-  // VO2max intervals (I pace): ~98% VO2max
-  const vo2maxV = velocityAtIntensity(vdot, 0.98);
+  // Harder paces: add altitude adjustment (default +15 sec/km for Bogotá ~2,640m)
+  const alt = altitudeAdjustSec || 0;
 
   return {
     pace_easy_min: velocityToPaceSecPerKm(easyFastV),   // faster end of easy
     pace_easy_max: velocityToPaceSecPerKm(easySlowV),   // slower end of easy
-    pace_tempo: velocityToPaceSecPerKm(tempoV),
-    pace_lt: velocityToPaceSecPerKm(ltV),
-    pace_race: velocityToPaceSecPerKm(raceV),
-    pace_vo2max: velocityToPaceSecPerKm(vo2maxV),
+    pace_tempo:    velocityToPaceSecPerKm(velocityAtIntensity(vdot, 0.77)) + alt,
+    pace_lt:       velocityToPaceSecPerKm(velocityAtIntensity(vdot, 0.82)) + alt,
+    pace_race:     velocityToPaceSecPerKm(velocityAtIntensity(vdot, 0.90)) + alt,
+    pace_vo2max:   velocityToPaceSecPerKm(velocityAtIntensity(vdot, 0.97)) + alt,
   };
 }
 

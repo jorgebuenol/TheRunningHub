@@ -62,19 +62,36 @@ function velocityToPaceSecPerKm(v) {
   return Math.round((1000 / v) * 60);
 }
 
-export function getTrainingPaces(vdot) {
+/**
+ * Calculate training paces from VDOT with Bogotá altitude adjustment.
+ *
+ * Corrected Daniels intensity zones:
+ *   Easy:       58–67% VO2max (no altitude adjustment)
+ *   Tempo (M):  77% VO2max   (+altitudeAdjustSec)
+ *   Threshold:  82% VO2max   (+altitudeAdjustSec)
+ *   Race:       90% VO2max   (+altitudeAdjustSec)
+ *   Interval:   97% VO2max   (+altitudeAdjustSec)
+ *
+ * @param {number} vdot - VDOT value
+ * @param {number} altitudeAdjustSec - seconds/km to add for altitude (default 15 for Bogotá 2640m). Pass 0 for sea level.
+ */
+export function getTrainingPaces(vdot, altitudeAdjustSec = 15) {
   if (!vdot || vdot <= 0) return null;
 
-  const easySlowV = velocityAtIntensity(vdot, 0.65);
-  const easyFastV = velocityAtIntensity(vdot, 0.79);
+  // Easy range: 58–67% VO2max — NO altitude adjustment
+  const easySlowV = velocityAtIntensity(vdot, 0.58);
+  const easyFastV = velocityAtIntensity(vdot, 0.67);
+
+  // Harder paces: add altitude adjustment (default +15 sec/km for Bogotá ~2,640m)
+  const alt = altitudeAdjustSec || 0;
 
   return {
     pace_easy_min: velocityToPaceSecPerKm(easyFastV),
     pace_easy_max: velocityToPaceSecPerKm(easySlowV),
-    pace_tempo: velocityToPaceSecPerKm(velocityAtIntensity(vdot, 0.84)),
-    pace_lt: velocityToPaceSecPerKm(velocityAtIntensity(vdot, 0.88)),
-    pace_race: velocityToPaceSecPerKm(velocityAtIntensity(vdot, 0.93)),
-    pace_vo2max: velocityToPaceSecPerKm(velocityAtIntensity(vdot, 0.98)),
+    pace_tempo:    velocityToPaceSecPerKm(velocityAtIntensity(vdot, 0.77)) + alt,
+    pace_lt:       velocityToPaceSecPerKm(velocityAtIntensity(vdot, 0.82)) + alt,
+    pace_race:     velocityToPaceSecPerKm(velocityAtIntensity(vdot, 0.90)) + alt,
+    pace_vo2max:   velocityToPaceSecPerKm(velocityAtIntensity(vdot, 0.97)) + alt,
   };
 }
 
