@@ -113,6 +113,7 @@ export default function AthleteDetailPage() {
     magicMileMin: '',
     magicMileSec: '',
     isRunWalk: false,
+    isCouchToRun: false,
     // Beginner fitness assessment
     canRun10Min: '',
     longestRunMinutes: '',
@@ -146,6 +147,7 @@ export default function AthleteDetailPage() {
       magicMileMin: '',
       magicMileSec: '',
       isRunWalk: false,
+      isCouchToRun: false,
       canRun10Min: '',
       longestRunMinutes: '',
       runningFrequency: '',
@@ -162,6 +164,7 @@ export default function AthleteDetailPage() {
       if (genOverrides.levelOverride) overrides.levelOverride = genOverrides.levelOverride;
       if (genOverrides.vdotOverride) overrides.vdotOverride = parseInt(genOverrides.vdotOverride);
       if (genOverrides.isRunWalk) overrides.isRunWalk = true;
+      if (genOverrides.isCouchToRun) overrides.isCouchToRun = true;
 
       // Calculate Magic Mile seconds if provided
       const mm = parseInt(genOverrides.magicMileMin) || 0;
@@ -811,6 +814,34 @@ function PreGenerationModal({ athlete, genOverrides, setGenOverrides, onConfirm,
             </div>
           </div>
         )}
+
+        <div className="border-t border-ash my-4" />
+
+        {/* Couch to Run Toggle */}
+        <div className="mb-4">
+          <label className="flex items-start gap-3 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={genOverrides.isCouchToRun}
+              onChange={e => setGenOverrides(o => ({ ...o, isCouchToRun: e.target.checked }))}
+              className="accent-volt mt-1"
+            />
+            <div>
+              <span className="font-display text-sm text-white group-hover:text-volt transition-colors">COUCH TO RUN MODE</span>
+              <p className="text-smoke text-xs mt-1">Skip VDOT paces. Build from zero with run/walk intervals.</p>
+            </div>
+          </label>
+          {genOverrides.isCouchToRun && (
+            <div className="mt-3 ml-6 p-3 border border-volt/20 bg-volt/5 text-xs text-smoke space-y-1">
+              <p className="text-volt font-bold uppercase text-[10px] mb-2">8-Week Run/Walk Progression</p>
+              <p>Wk 1-2: 2 min run / 2 min walk x 8 (20-25 min)</p>
+              <p>Wk 3-4: 3 min run / 2 min walk x 6 (25-30 min)</p>
+              <p>Wk 5-6: 5 min run / 1 min walk x 5 (30 min)</p>
+              <p>Wk 7-8: 20-25 min continuous + Magic Mile test</p>
+              <p className="text-smoke/60 pt-1">Wk 9+: Standard beginner plan (VDOT 25)</p>
+            </div>
+          )}
+        </div>
 
         <div className="border-t border-ash my-4" />
 

@@ -208,6 +208,91 @@ Output ONLY the JSON array contents -- I will provide the opening {"weeks":[ pre
   return parseMacroResponse(content, weeksToRace, athlete.weekly_km);
 }
 
+
+/**
+ * Couch to Run: deterministic macro plan (no AI call).
+ * Weeks 1-8 are a fixed run/walk → continuous progression.
+ * Weeks 9+ follow a standard beginner build toward race day.
+ */
+export function generateCouchToRunMacro(weeksToRace) {
+  const C2R_WEEKS = [
+    { km: 4,  notes: 'Run/Walk: 2 min run / 2 min walk × 8 reps (20-25 min). 3 sessions/week.' },
+    { km: 4,  notes: 'Run/Walk: 2 min run / 2 min walk × 8 reps (20-25 min). 3 sessions/week.' },
+    { km: 5,  notes: 'Run/Walk: 3 min run / 2 min walk × 6 reps (25-30 min). 3 sessions/week.' },
+    { km: 5,  notes: 'Run/Walk: 3 min run / 2 min walk × 6 reps (25-30 min). 3 sessions/week.' },
+    { km: 7,  notes: 'Run/Walk: 5 min run / 1 min walk × 5 reps (30 min). 3 sessions/week.' },
+    { km: 7,  notes: 'Run/Walk: 5 min run / 1 min walk × 5 reps (30 min). 3 sessions/week.' },
+    { km: 10, notes: 'Continuous easy running: 20-25 min per session. 3 sessions/week.' },
+    { km: 12, notes: 'Continuous easy running: 20-25 min per session. Magic Mile test: 1-mile time trial after 10 min warmup. Record time for VDOT estimation.' },
+  ];
+
+  const weeks = [];
+
+  // Phase 1: C2R progression (weeks 1-8)
+  for (let i = 0; i < Math.min(8, weeksToRace); i++) {
+    weeks.push({
+      week_number: i + 1,
+      phase: i < 6 ? 'base' : 'build',
+      km_target: C2R_WEEKS[i].km,
+      intensity_focus: C2R_WEEKS[i].notes,
+      is_recovery: false,
+    });
+  }
+
+  // Phase 2: Standard beginner progression (weeks 9+) toward race day
+  if (weeksToRace > 8) {
+    const remaining = weeksToRace - 8;
+    let currentKm = 15; // start from ~15km after C2R graduation
+
+    for (let i = 0; i < remaining; i++) {
+      const weekNum = 9 + i;
+      const weeksLeft = weeksToRace - weekNum + 1;
+
+      // Phase based on distance to race
+      let phase;
+      if (weeksLeft <= 1) phase = 'race';
+      else if (weeksLeft <= 3) phase = 'taper';
+      else if (i >= remaining - 6 && remaining > 8) phase = 'peak';
+      else phase = 'build';
+
+      // Recovery every 4th week (within build/peak)
+      const isRecovery = (i + 1) % 4 === 0 && phase !== 'taper' && phase !== 'race';
+
+      let km;
+      if (phase === 'race') {
+        km = Math.round(currentKm * 0.4);
+      } else if (phase === 'taper') {
+        km = Math.round(currentKm * (weeksLeft === 2 ? 0.6 : 0.7));
+      } else if (isRecovery) {
+        km = Math.round(currentKm * 0.75);
+      } else {
+        km = currentKm;
+        // Progressive overload: +10% per non-recovery week, cap at 45km for beginners
+        currentKm = Math.min(45, Math.round(currentKm * 1.10));
+      }
+
+      let notes = '';
+      if (isRecovery) notes = 'Recovery week. Easy running only. Absorb training.';
+      else if (phase === 'taper') notes = 'Taper. Reduce volume, maintain some intensity.';
+      else if (phase === 'race') notes = 'Race week! Light shakeout runs only before race day.';
+      else if (phase === 'peak') notes = 'Peak training. Race pace segments in long run.';
+      else notes = 'Build phase. Introduce tempo/threshold work.';
+
+      weeks.push({
+        week_number: weekNum,
+        phase: isRecovery ? `${phase}_recovery` : phase,
+        km_target: km,
+        intensity_focus: notes,
+        is_recovery: isRecovery,
+      });
+    }
+  }
+
+  console.log(`Couch to Run macro: ${weeks.length} weeks generated deterministically`);
+  return { weeks };
+}
+
+
 function parseMacroResponse(text, weeksToRace, athleteWeeklyKm) {
   let jsonStr = text.trim();
   if (jsonStr.startsWith('```')) jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');

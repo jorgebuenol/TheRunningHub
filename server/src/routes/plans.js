@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { coachOnly } from '../middleware/auth.js';
-import { generateTrainingPlan, generateMacroPlan, generateWeeklyDetail, checkRedFlags, deriveAthleteLevel, intensityFromPhase } from '../services/planGenerator.js';
+import { generateTrainingPlan, generateMacroPlan, generateCouchToRunMacro, generateWeeklyDetail, checkRedFlags, deriveAthleteLevel, intensityFromPhase } from '../services/planGenerator.js';
 import { getAthleteMonitoringSummary } from '../services/monitoring.js';
 import { addDays, startOfWeek } from '../utils/dates.js';
 import { isOnboardingComplete, getMissingSections } from '../utils/onboardingProgress.js';
@@ -43,7 +43,7 @@ function dayOffset(dayName) {
 planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
   try {
     const { athleteId } = req.params;
-    const { levelOverride, vdotOverride, magicMileSeconds, isRunWalk } = req.body || {};
+    const { levelOverride, vdotOverride, magicMileSeconds, isRunWalk, isCouchToRun } = req.body || {};
 
     // Fetch athlete with profile
     const { data: athlete, error: athleteErr } = await req.supabase
@@ -82,16 +82,25 @@ planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
     // Build overrides object for AI prompt
     const overrides = { levelOverride, vdotOverride: effectiveVdot, isRunWalk };
 
-    // Generate macro periodization skeleton with AI
+    // Generate macro periodization skeleton
     let macroPlan;
-    try {
-      macroPlan = await generateMacroPlan(athlete, athlete.profiles, overrides);
-    } catch (aiErr) {
-      const msg = aiErr.message || '';
-      if (msg.includes('credit balance')) {
-        return res.status(402).json({ message: 'Anthropic API credits exhausted. Please add credits at console.anthropic.com.' });
+    if (isCouchToRun) {
+      // Couch to Run: deterministic macro (no AI call)
+      const weeksToRaceCalc = Math.max(12, Math.ceil(
+        (new Date(athlete.goal_race_date) - new Date()) / (7 * 24 * 60 * 60 * 1000)
+      ));
+      macroPlan = generateCouchToRunMacro(weeksToRaceCalc);
+    } else {
+      // Standard AI-generated macro
+      try {
+        macroPlan = await generateMacroPlan(athlete, athlete.profiles, overrides);
+      } catch (aiErr) {
+        const msg = aiErr.message || '';
+        if (msg.includes('credit balance')) {
+          return res.status(402).json({ message: 'Anthropic API credits exhausted. Please add credits at console.anthropic.com.' });
+        }
+        return res.status(500).json({ message: `AI generation failed: ${msg.substring(0, 150)}` });
       }
-      return res.status(500).json({ message: `AI generation failed: ${msg.substring(0, 150)}` });
     }
 
     const weeksToRace = Math.ceil(
@@ -106,7 +115,9 @@ planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
       .from('training_plans')
       .insert({
         athlete_id: athleteId,
-        name: `${athlete.goal_race} Plan — ${athlete.profiles.full_name}`,
+        name: isCouchToRun
+          ? `Couch to Run → ${athlete.goal_race} — ${athlete.profiles.full_name}`
+          : `${athlete.goal_race} Plan — ${athlete.profiles.full_name}`,
         goal_race: athlete.goal_race,
         goal_time_seconds: athlete.goal_time_seconds,
         race_date: athlete.goal_race_date,
