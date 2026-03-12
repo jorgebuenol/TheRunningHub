@@ -51,6 +51,8 @@ const INTENSITY_STYLES = {
 };
 
 const DAY_NAMES = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const DAY_ABBREV = { monday: 'MON', tuesday: 'TUE', wednesday: 'WED', thursday: 'THU', friday: 'FRI', saturday: 'SAT', sunday: 'SUN' };
 
 const WORKOUT_TYPES = [
   'easy', 'tempo', 'long_run', 'intervals', 'race_pace',
@@ -315,7 +317,7 @@ export default function PlanViewPage() {
     if (adj.workout_id) {
       for (const week of plan.plan_weeks) {
         const w = week.workouts?.find(wo => wo.id === adj.workout_id);
-        if (w) return { type: 'workout', week: week.week_number, day: DAY_NAMES[w.day_of_week], title: w.title, source: w };
+        if (w) return { type: 'workout', week: week.week_number, day: DAY_ABBREV[w.day_of_week] || w.day_of_week, title: w.title, source: w };
       }
     }
     return null;
@@ -563,7 +565,7 @@ export default function PlanViewPage() {
                 <div className="overflow-x-auto -mx-1 px-1 pb-1">
                 <div className="grid grid-cols-7 gap-2 min-w-[700px]">
                   {DAY_NAMES.map((day, i) => {
-                    const workout = week.workouts?.find(w => w.day_of_week === i);
+                    const workout = week.workouts?.find(w => w.day_of_week === DAY_KEYS[i]);
                     if (!workout) {
                       return (
                         <div key={i} className="border border-ash/50 p-3 min-h-[120px]">

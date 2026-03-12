@@ -455,7 +455,7 @@ Each workout must have these exact fields:
   "total_km": 35,
   "workouts": [
     {
-      "day_of_week": 0,
+      "day_of_week": "monday",
       "workout_type": "easy|tempo|long_run|intervals|race_pace|recovery|rest|cross_training|race",
       "title": "Descriptive title",
       "description": "Full workout description with warm-up, main set, cool-down, paces, and durations as per the templates above",
@@ -472,7 +472,7 @@ Each workout must have these exact fields:
   ]
 }
 
-day_of_week: 0=Monday, 1=Tuesday, ..., 6=Sunday
+day_of_week: MUST be a lowercase string — "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday". Never use numbers, never capitalize, never abbreviate.
 workout_type values: "easy", "tempo", "long_run", "intervals", "race_pace", "recovery", "rest", "cross_training", "race"
 All 7 days must be included. Rest days have distance_km: 0, duration_minutes: 0, pace_target_sec_km: null, rpe_target: null.
 pace_target_sec_km, pace_range_min, pace_range_max are integers (seconds per km).

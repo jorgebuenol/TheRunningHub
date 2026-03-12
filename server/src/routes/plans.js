@@ -7,6 +7,38 @@ import { isOnboardingComplete, getMissingSections } from '../utils/onboardingPro
 
 export const planRoutes = Router();
 
+/* Day-of-week helpers — canonical format is lowercase string */
+const DAY_NAMES_ORDERED = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+const ABBREV_MAP = {
+  mon: 'monday', tue: 'tuesday', tues: 'tuesday', wed: 'wednesday',
+  thu: 'thursday', thur: 'thursday', thurs: 'thursday',
+  fri: 'friday', sat: 'saturday', sun: 'sunday',
+};
+
+/**
+ * Normalize any day_of_week value (number, string, abbreviation) to lowercase day name.
+ * Returns null if the value cannot be normalized.
+ */
+function normalizeDayOfWeek(val) {
+  if (val == null) return null;
+  if (typeof val === 'number' && val >= 0 && val <= 6) return DAY_NAMES_ORDERED[val];
+  if (typeof val === 'string') {
+    const lower = val.toLowerCase().trim();
+    if (DAY_NAMES_ORDERED.includes(lower)) return lower;
+    if (ABBREV_MAP[lower]) return ABBREV_MAP[lower];
+    const num = parseInt(lower, 10);
+    if (!isNaN(num) && num >= 0 && num <= 6) return DAY_NAMES_ORDERED[num];
+  }
+  return null;
+}
+
+/** Get the offset (0-6) for a day name string for date arithmetic */
+function dayOffset(dayName) {
+  const idx = DAY_NAMES_ORDERED.indexOf(dayName);
+  return idx >= 0 ? idx : 0;
+}
+
 // POST generate a new plan for an athlete
 planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
   try {
@@ -209,35 +241,53 @@ planRoutes.post('/:planId/weeks/:weekId/generate', coachOnly, async (req, res, n
       return res.status(500).json({ message: `AI generation failed: ${msg.substring(0, 150)}` });
     }
 
-    // 7. Insert workouts
-    const workouts = weekDetail.workouts.map(w => {
-      const workoutDate = new Date(targetWeek.start_date);
-      workoutDate.setDate(workoutDate.getDate() + w.day_of_week);
+    // 7. Insert workouts — normalize day_of_week to lowercase string
+    const workouts = weekDetail.workouts
+      .map(w => {
+        const normalizedDay = normalizeDayOfWeek(w.day_of_week);
+        if (!normalizedDay) {
+          console.warn(`Skipping workout "${w.title}": invalid day_of_week "${w.day_of_week}"`);
+          return null;
+        }
+        const workoutDate = new Date(targetWeek.start_date);
+        workoutDate.setDate(workoutDate.getDate() + dayOffset(normalizedDay));
 
-      return {
-        plan_week_id: weekId,
-        athlete_id: athlete.id,
-        day_of_week: w.day_of_week,
-        workout_date: workoutDate.toISOString().split('T')[0],
-        workout_type: w.workout_type,
-        title: w.title,
-        description: w.description,
-        distance_km: w.distance_km,
-        duration_minutes: w.duration_minutes,
-        pace_target_sec_km: w.pace_target_sec_km,
-        pace_range_min: w.pace_range_min,
-        pace_range_max: w.pace_range_max,
-        hr_zone: w.hr_zone,
-        intervals_detail: w.intervals_detail,
-        coach_notes: w.coach_notes,
-        session_structure: w.session_structure || null,
-        rpe_target: w.rpe_target || null,
-      };
-    });
+        return {
+          plan_week_id: weekId,
+          athlete_id: athlete.id,
+          day_of_week: normalizedDay,
+          workout_date: workoutDate.toISOString().split('T')[0],
+          workout_type: w.workout_type,
+          title: w.title,
+          description: w.description,
+          distance_km: w.distance_km,
+          duration_minutes: w.duration_minutes,
+          pace_target_sec_km: w.pace_target_sec_km,
+          pace_range_min: w.pace_range_min,
+          pace_range_max: w.pace_range_max,
+          hr_zone: w.hr_zone,
+          intervals_detail: w.intervals_detail,
+          coach_notes: w.coach_notes,
+          session_structure: w.session_structure || null,
+          rpe_target: w.rpe_target || null,
+        };
+      })
+      .filter(Boolean);
 
-    const { error: workoutsErr } = await req.supabase
+    // Insert with automatic retry on constraint violation
+    let workoutsErr;
+    const { error: insertErr } = await req.supabase
       .from('workouts')
       .insert(workouts);
+    workoutsErr = insertErr;
+
+    if (workoutsErr?.code === '23514') {
+      console.warn(`Workout constraint violation (${workoutsErr.message}), retrying insert...`);
+      const { error: retryErr } = await req.supabase
+        .from('workouts')
+        .insert(workouts);
+      workoutsErr = retryErr;
+    }
 
     if (workoutsErr) throw workoutsErr;
 
@@ -639,7 +689,7 @@ async function fetchFullPlan(supabase, planId) {
     plan.plan_weeks.sort((a, b) => a.week_number - b.week_number);
     for (const week of plan.plan_weeks) {
       if (week.workouts) {
-        week.workouts.sort((a, b) => a.day_of_week - b.day_of_week);
+        week.workouts.sort((a, b) => dayOffset(a.day_of_week) - dayOffset(b.day_of_week));
       }
     }
   }

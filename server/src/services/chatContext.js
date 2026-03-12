@@ -193,7 +193,10 @@ export async function buildPlanReviewContext(supabase, athleteId, planId) {
   if (plan.plan_weeks) {
     plan.plan_weeks.sort((a, b) => a.week_number - b.week_number);
     for (const week of plan.plan_weeks) {
-      if (week.workouts) week.workouts.sort((a, b) => a.day_of_week - b.day_of_week);
+      if (week.workouts) {
+        const dayOrder = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        week.workouts.sort((a, b) => dayOrder.indexOf(a.day_of_week) - dayOrder.indexOf(b.day_of_week));
+      }
     }
   }
 
@@ -205,7 +208,7 @@ export async function buildPlanReviewContext(supabase, athleteId, planId) {
   // Plan is mostly skeleton if more un-generated weeks than generated
   const isMostlySkeleton = skeletonWeeks.length > generatedWeeks.length;
 
-  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dayAbbrev = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
   const parts = [];
 
   parts.push(`You are an elite running coach AI assistant helping review and adjust a training plan. The athlete trains in Bogotá, Colombia (altitude ~2,640m).`);
@@ -241,7 +244,7 @@ export async function buildPlanReviewContext(supabase, athleteId, planId) {
 
     if (generated && week.workouts?.length) {
       for (const w of week.workouts) {
-        let line = `  ${dayNames[w.day_of_week] || '?'} | id:${w.id} | ${w.workout_type} | ${w.title}`;
+        let line = `  ${dayAbbrev[w.day_of_week] || '?'} | id:${w.id} | ${w.workout_type} | ${w.title}`;
         if (w.distance_km) line += ` | ${w.distance_km}km`;
         if (w.duration_minutes) line += ` | ${w.duration_minutes}min`;
         if (w.pace_range_min && w.pace_range_max) line += ` | ${formatPace(w.pace_range_min)}-${formatPace(w.pace_range_max)}/km`;
