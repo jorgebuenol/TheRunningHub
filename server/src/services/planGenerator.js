@@ -166,9 +166,11 @@ RECOVERY WEEKS:
 - Mark recovery weeks in the phase field as "base_recovery", "build_recovery", or "peak_recovery"
 
 WEEKLY KM PROGRESSION:
-- Start at athlete's current weekly km (or slightly below if entering base phase)
+- Week 1 volume = current weekly km × 0.82 (rounded to nearest whole number). Minimum 8 km.
+  Example: athlete at 50 km/week → Week 1 = 41 km. Athlete at 30 km/week → Week 1 = 25 km.
 - Increase max 15% per 3-week block for beginners, max 20% for recreational, max 25% for intermediate
 - Recovery weeks: reduce volume 25-30% from the previous non-recovery week
+- CRITICAL: After a recovery week, the NEXT week must return to the volume of the week BEFORE the recovery week (not jump to a new peak). Example: Week 3 = 35km, Week 4 (recovery) = 26km, Week 5 = 35km (returns to Week 3 level, does NOT jump to 40km).
 - Taper: week 2-before-race = 60% of peak volume, race week = 40% of peak volume
 
 RESPOND ONLY WITH THIS JSON (no explanation, no markdown):
@@ -203,10 +205,10 @@ Output ONLY the JSON array contents -- I will provide the opening {"weeks":[ pre
 
   console.log(`Macro plan tokens: ${response.usage?.input_tokens} in / ${response.usage?.output_tokens} out`);
   const content = '{"weeks":[' + response.content[0].text;
-  return parseMacroResponse(content, weeksToRace);
+  return parseMacroResponse(content, weeksToRace, athlete.weekly_km);
 }
 
-function parseMacroResponse(text, weeksToRace) {
+function parseMacroResponse(text, weeksToRace, athleteWeeklyKm) {
   let jsonStr = text.trim();
   if (jsonStr.startsWith('```')) jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
   const lastBrace = jsonStr.lastIndexOf('}');
@@ -226,7 +228,72 @@ function parseMacroResponse(text, weeksToRace) {
     }
   }
 
+  // Post-processing: enforce volume rules the AI might not follow perfectly
+  if (athleteWeeklyKm && plan.weeks.length > 0) {
+    enforceVolumeRules(plan.weeks, athleteWeeklyKm);
+  }
+
   return plan;
+}
+
+/**
+ * Post-process macro plan weeks to enforce volume rules:
+ * 1. Week 1 = weekly_km * 0.82, minimum 8km
+ * 2. After recovery week, return to pre-recovery volume (not jump to new peak)
+ */
+function enforceVolumeRules(weeks, athleteWeeklyKm) {
+  const weeklyKm = parseFloat(athleteWeeklyKm) || 0;
+  if (weeklyKm <= 0) return;
+
+  // Rule 1: Week 1 starting volume = 82% of current weekly km, min 8
+  const targetWeek1 = Math.max(8, Math.round(weeklyKm * 0.82));
+  const week1 = weeks[0];
+  if (week1 && week1.km_target) {
+    const maxAllowed = Math.round(weeklyKm * 0.90); // Allow up to 90% as sanity cap
+    if (week1.km_target > maxAllowed) {
+      console.log(`Volume fix: Week 1 ${week1.km_target}km → ${targetWeek1}km (82% of ${weeklyKm}km)`);
+      // Scale the ratio — if AI had week1 too high, proportionally adjust early weeks
+      const ratio = targetWeek1 / week1.km_target;
+      week1.km_target = targetWeek1;
+
+      // Also scale weeks 2-3 proportionally if they're non-recovery and too high
+      for (let i = 1; i < Math.min(3, weeks.length); i++) {
+        if (!weeks[i].phase?.includes('recovery')) {
+          const scaled = Math.round(weeks[i].km_target * ratio);
+          if (scaled < weeks[i].km_target) {
+            console.log(`Volume fix: Week ${weeks[i].week_number} ${weeks[i].km_target}km → ${scaled}km (scaled)`);
+            weeks[i].km_target = scaled;
+          }
+        }
+      }
+    }
+  }
+
+  // Rule 2: After a recovery week, next week returns to pre-recovery volume
+  for (let i = 1; i < weeks.length - 1; i++) {
+    const isRecovery = weeks[i].phase?.includes('recovery') || weeks[i].is_recovery;
+    if (!isRecovery) continue;
+
+    // Find the non-recovery week before this recovery week
+    let preRecoveryKm = null;
+    for (let j = i - 1; j >= 0; j--) {
+      if (!weeks[j].phase?.includes('recovery') && !weeks[j].is_recovery) {
+        preRecoveryKm = weeks[j].km_target;
+        break;
+      }
+    }
+
+    if (preRecoveryKm == null) continue;
+
+    // The week after recovery should not exceed the pre-recovery week
+    const nextWeek = weeks[i + 1];
+    if (nextWeek && !nextWeek.phase?.includes('recovery') && !nextWeek.is_recovery) {
+      if (nextWeek.km_target > preRecoveryKm * 1.05) { // Allow 5% tolerance
+        console.log(`Volume fix: Week ${nextWeek.week_number} post-recovery ${nextWeek.km_target}km → ${preRecoveryKm}km (return to pre-recovery)`);
+        nextWeek.km_target = preRecoveryKm;
+      }
+    }
+  }
 }
 
 
