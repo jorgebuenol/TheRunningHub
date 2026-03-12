@@ -59,6 +59,13 @@ const WORKOUT_TYPES = [
   'recovery', 'rest', 'cross_training', 'race',
 ];
 
+/** Safely convert any value to a renderable string — prevents React error #31 from nested objects */
+function safeStr(val) {
+  if (val == null) return '';
+  if (typeof val === 'object') return JSON.stringify(val);
+  return String(val);
+}
+
 const HR_ZONES = ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'];
 
 export default function PlanViewPage() {
@@ -603,7 +610,7 @@ export default function PlanViewPage() {
                             className="cursor-pointer"
                             onClick={() => setExpandedWorkout(isExpanded ? null : workout.id)}
                           >
-                            <p className="text-white text-xs font-bold uppercase leading-tight">{workout.title}</p>
+                            <p className="text-white text-xs font-bold uppercase leading-tight">{safeStr(workout.title)}</p>
                             {workout.distance_km && (
                               <p className="text-volt text-xs font-semibold mt-1">{workout.distance_km}km</p>
                             )}
@@ -613,14 +620,14 @@ export default function PlanViewPage() {
                               </p>
                             )}
                             {workout.hr_zone && (
-                              <p className="text-smoke text-xs">{workout.hr_zone}</p>
+                              <p className="text-smoke text-xs">{safeStr(workout.hr_zone)}</p>
                             )}
                             {isExpanded && (
                               <div className="mt-2 pt-2 border-t border-ash/50 space-y-1">
                                 {workout.duration_minutes && <p className="text-smoke text-xs">{formatTime(Math.round(workout.duration_minutes * 60))}</p>}
-                                {workout.description && <p className="text-smoke text-xs">{normalizeDescriptionPace(workout.description, workout)}</p>}
-                                {workout.coach_notes && <p className="text-volt/80 text-xs">Coach: {workout.coach_notes}</p>}
-                                {workout.intervals_detail && (
+                                {workout.description && <p className="text-smoke text-xs">{normalizeDescriptionPace(safeStr(workout.description), workout)}</p>}
+                                {workout.coach_notes && <p className="text-volt/80 text-xs">Coach: {safeStr(workout.coach_notes)}</p>}
+                                {workout.intervals_detail && typeof workout.intervals_detail === 'object' && (
                                   <p className="text-smoke text-xs">
                                     {workout.intervals_detail.reps}x{workout.intervals_detail.distance_m}m @ {formatPace(workout.intervals_detail.pace_sec_km)}/km, {workout.intervals_detail.rest_seconds}s rest
                                   </p>
@@ -816,7 +823,7 @@ export default function PlanViewPage() {
                 const label = info
                   ? info.type === 'week'
                     ? `W${info.week} — ${(info.phase || '').toUpperCase()}`
-                    : `W${info.week} ${info.day} — ${info.title}`
+                    : `W${info.week} ${info.day} — ${safeStr(info.title)}`
                   : (adj.week_id || adj.workout_id || '').slice(0, 8);
                 return (
                   <div key={i} className={`border bg-steel/50 px-3 py-2 mb-2 text-xs ${
@@ -837,8 +844,8 @@ export default function PlanViewPage() {
                         return (
                           <p key={key}>
                             <span className="text-smoke/70">{key}:</span>{' '}
-                            {oldVal != null && <span className="text-red-400/70 line-through mr-1">{oldVal}</span>}
-                            <span className="text-green-400">{val}</span>
+                            {oldVal != null && <span className="text-red-400/70 line-through mr-1">{safeStr(oldVal)}</span>}
+                            <span className="text-green-400">{safeStr(val)}</span>
                           </p>
                         );
                       })}

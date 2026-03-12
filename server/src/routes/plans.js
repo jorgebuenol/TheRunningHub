@@ -39,6 +39,55 @@ function dayOffset(dayName) {
   return idx >= 0 ? idx : 0;
 }
 
+/* ─── Workout field sanitization ─── */
+// Only these fields may be written to the workouts table
+const VALID_WORKOUT_FIELDS = new Set([
+  'distance_km', 'duration_minutes', 'pace_target_sec_km',
+  'pace_range_min', 'pace_range_max', 'hr_zone',
+  'title', 'description', 'workout_type', 'coach_notes',
+  'intervals_detail', 'session_structure', 'rpe_target', 'status',
+]);
+
+// These JSONB columns are allowed to be objects
+const JSONB_FIELDS = new Set(['intervals_detail', 'session_structure']);
+
+/**
+ * Sanitize a workout fields object before saving to Supabase.
+ * - Strips unknown fields
+ * - Converts any non-JSONB field that is an object/array to a JSON string
+ * - Ensures JSONB fields are objects (not primitives)
+ */
+function sanitizeWorkoutFields(changes) {
+  const clean = {};
+  for (const [key, val] of Object.entries(changes)) {
+    if (!VALID_WORKOUT_FIELDS.has(key)) continue;
+    if (val === undefined) continue;
+
+    if (JSONB_FIELDS.has(key)) {
+      // JSONB columns: keep objects, stringify primitives, pass null through
+      if (val === null) {
+        clean[key] = null;
+      } else if (typeof val === 'object') {
+        clean[key] = val;
+      } else {
+        // Primitive in a JSONB column — wrap or skip
+        clean[key] = null;
+      }
+    } else {
+      // Non-JSONB columns: must be a primitive (string, number, boolean, null)
+      if (val === null) {
+        clean[key] = null;
+      } else if (typeof val === 'object') {
+        // Object in a text/numeric column — serialize to string
+        clean[key] = JSON.stringify(val);
+      } else {
+        clean[key] = val;
+      }
+    }
+  }
+  return clean;
+}
+
 // POST generate a new plan for an athlete
 planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
   try {
@@ -263,11 +312,8 @@ planRoutes.post('/:planId/weeks/:weekId/generate', coachOnly, async (req, res, n
         const workoutDate = new Date(targetWeek.start_date);
         workoutDate.setDate(workoutDate.getDate() + dayOffset(normalizedDay));
 
-        return {
-          plan_week_id: weekId,
-          athlete_id: athlete.id,
-          day_of_week: normalizedDay,
-          workout_date: workoutDate.toISOString().split('T')[0],
+        // Sanitize AI output — flatten objects in text columns, whitelist fields
+        const safeFields = sanitizeWorkoutFields({
           workout_type: w.workout_type,
           title: w.title,
           description: w.description,
@@ -281,6 +327,14 @@ planRoutes.post('/:planId/weeks/:weekId/generate', coachOnly, async (req, res, n
           coach_notes: w.coach_notes,
           session_structure: w.session_structure || null,
           rpe_target: w.rpe_target || null,
+        });
+
+        return {
+          plan_week_id: weekId,
+          athlete_id: athlete.id,
+          day_of_week: normalizedDay,
+          workout_date: workoutDate.toISOString().split('T')[0],
+          ...safeFields,
         };
       })
       .filter(Boolean);
@@ -521,9 +575,13 @@ planRoutes.post('/:planId/apply-adjustments', coachOnly, async (req, res, next) 
 
         if (workout) affectedWeekIds.add(workout.plan_week_id);
 
+        // Sanitize: whitelist fields + flatten nested objects in non-JSONB columns
+        const safeChanges = sanitizeWorkoutFields(adj.changes);
+        if (Object.keys(safeChanges).length === 0) continue;
+
         const { error: updateErr } = await req.supabase
           .from('workouts')
-          .update(adj.changes)
+          .update(safeChanges)
           .eq('id', adj.workout_id);
 
         if (updateErr) throw updateErr;

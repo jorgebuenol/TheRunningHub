@@ -29,6 +29,13 @@ function toLocalDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** Safely convert any value to a renderable string — prevents React error #31 from nested objects */
+function safeStr(val) {
+  if (val == null) return '';
+  if (typeof val === 'object') return JSON.stringify(val);
+  return String(val);
+}
+
 export default function MyPlanPage() {
   const { user } = useAuth();
   const [athlete, setAthlete] = useState(null);
@@ -253,7 +260,7 @@ export default function MyPlanPage() {
       {todayWorkout && todayWorkout.workout_type !== 'rest' && (
         <div className={`border-l-4 ${WORKOUT_COLORS[todayWorkout.workout_type] || ''} p-4 sm:p-6 mb-6 sm:mb-8`}>
           <p className="text-smoke text-xs uppercase tracking-wider mb-1">TODAY</p>
-          <h2 className="font-display text-xl sm:text-2xl text-volt">{todayWorkout.title}</h2>
+          <h2 className="font-display text-xl sm:text-2xl text-volt">{safeStr(todayWorkout.title)}</h2>
           <div className="flex flex-wrap gap-3 sm:gap-6 mt-3">
             {todayWorkout.distance_km && <span className="text-lg font-bold">{todayWorkout.distance_km}km</span>}
             {todayWorkout.duration_minutes && <span className="text-smoke">{formatTime(Math.round(todayWorkout.duration_minutes * 60))}</span>}
@@ -261,8 +268,8 @@ export default function MyPlanPage() {
               <span className="text-smoke">{formatPace(todayWorkout.pace_range_min)}-{formatPace(todayWorkout.pace_range_max)} /km</span>
             )}
           </div>
-          {todayWorkout.description && <p className="text-sm mt-3">{normalizeDescriptionPace(todayWorkout.description, todayWorkout)}</p>}
-          {todayWorkout.coach_notes && <p className="text-volt text-sm mt-2">Coach: {todayWorkout.coach_notes}</p>}
+          {todayWorkout.description && <p className="text-sm mt-3">{normalizeDescriptionPace(safeStr(todayWorkout.description), todayWorkout)}</p>}
+          {todayWorkout.coach_notes && <p className="text-volt text-sm mt-2">Coach: {safeStr(todayWorkout.coach_notes)}</p>}
 
           <div className="flex flex-col sm:flex-row gap-3 mt-4">
             {todayWorkout.status !== 'completed' && (
@@ -330,7 +337,7 @@ export default function MyPlanPage() {
                   {workout ? (
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="text-xs font-bold uppercase truncate">{workout.title}</p>
+                        <p className="text-xs font-bold uppercase truncate">{safeStr(workout.title)}</p>
                         {workout.distance_km && <span className="text-volt text-xs font-display flex-shrink-0">{workout.distance_km}KM</span>}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
@@ -398,7 +405,7 @@ export default function MyPlanPage() {
               <p className={`text-xs font-bold mb-2 ${isTodayCol ? 'text-volt' : 'text-smoke'}`}>{day}</p>
               {workout ? (
                 <>
-                  <p className="text-xs font-bold uppercase">{workout.title}</p>
+                  <p className="text-xs font-bold uppercase">{safeStr(workout.title)}</p>
                   {workout.distance_km && <p className="text-volt text-sm font-display mt-1">{workout.distance_km}KM</p>}
                   {workout.status === 'completed' && (
                     <div className="flex items-center gap-1 mt-2">
@@ -466,7 +473,7 @@ export default function MyPlanPage() {
       {noteWorkout && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="card max-w-md w-full">
-            <h3 className="font-display text-lg mb-4">ADD NOTE — {noteWorkout.title}</h3>
+            <h3 className="font-display text-lg mb-4">ADD NOTE — {safeStr(noteWorkout.title)}</h3>
             <textarea
               value={noteText}
               onChange={e => setNoteText(e.target.value)}

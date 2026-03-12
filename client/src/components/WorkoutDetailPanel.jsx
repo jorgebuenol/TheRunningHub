@@ -21,6 +21,13 @@ function getColors(type) {
   return WORKOUT_COLORS[type] || WORKOUT_COLORS.rest;
 }
 
+/** Safely convert any value to a renderable string — prevents React error #31 from nested objects */
+function safeStr(val) {
+  if (val == null) return '';
+  if (typeof val === 'object') return JSON.stringify(val);
+  return String(val);
+}
+
 
 export default function WorkoutDetailPanel({ workout, athlete, isCoach, planStatus, onClose, onEdit, onFeedback }) {
   const colors = getColors(workout.workout_type);
@@ -101,7 +108,7 @@ export default function WorkoutDetailPanel({ workout, athlete, isCoach, planStat
         {workout.coach_notes && (
           <div className="mt-4 bg-volt/5 border border-volt/30 p-3">
             <p className="text-smoke text-xs uppercase tracking-wider mb-1">Coach Notes</p>
-            <p className="text-sm text-volt whitespace-pre-wrap">{workout.coach_notes}</p>
+            <p className="text-sm text-volt whitespace-pre-wrap">{safeStr(workout.coach_notes)}</p>
           </div>
         )}
 
@@ -159,7 +166,7 @@ export default function WorkoutDetailPanel({ workout, athlete, isCoach, planStat
         {workout.athlete_notes && (
           <div className="border-t border-ash pt-4 mt-4">
             <p className="text-smoke text-xs uppercase mb-1">Athlete Notes</p>
-            <p className="text-sm">{workout.athlete_notes}</p>
+            <p className="text-sm">{safeStr(workout.athlete_notes)}</p>
           </div>
         )}
 
@@ -281,7 +288,7 @@ function PaceReferenceCard({ athlete, workout }) {
           {workout.hr_zone && (
             <div>
               <span className="text-smoke text-[10px] uppercase tracking-wider">HR Zone</span>
-              <span className="ml-2 text-volt font-bold text-sm">{workout.hr_zone}</span>
+              <span className="ml-2 text-volt font-bold text-sm">{safeStr(workout.hr_zone)}</span>
             </div>
           )}
           {workout.rpe_target && (
@@ -308,21 +315,25 @@ function PaceRow({ label, value }) {
 
 /* ─── Legacy Workout Detail (backward compat for old workouts) ─── */
 function LegacyWorkoutDetail({ workout }) {
+  const intv = typeof workout.intervals_detail === 'object' && workout.intervals_detail !== null
+    ? workout.intervals_detail
+    : null;
+
   return (
     <div className="mt-4 mb-4">
       {workout.description && (
         <div className="mb-3">
           <p className="text-smoke text-xs uppercase mb-1">Description</p>
-          <p className="text-sm whitespace-pre-wrap">{normalizeDescriptionPace(workout.description, workout)}</p>
+          <p className="text-sm whitespace-pre-wrap">{normalizeDescriptionPace(safeStr(workout.description), workout)}</p>
         </div>
       )}
-      {workout.intervals_detail && (
+      {intv && intv.reps && (
         <div className="mb-3">
           <p className="text-smoke text-xs uppercase mb-1">Intervals</p>
           <p className="text-sm font-semibold">
-            {workout.intervals_detail.reps}&times;{workout.intervals_detail.distance_m}m
-            @ {formatPace(workout.intervals_detail.pace_sec_km)}/km
-            | {workout.intervals_detail.rest_seconds}s {workout.intervals_detail.rest_type}
+            {intv.reps}&times;{intv.distance_m}m
+            @ {formatPace(intv.pace_sec_km)}/km
+            | {intv.rest_seconds}s {intv.rest_type}
           </p>
         </div>
       )}

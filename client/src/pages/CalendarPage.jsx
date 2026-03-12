@@ -35,6 +35,13 @@ function getColors(type) {
   return WORKOUT_COLORS[type] || WORKOUT_COLORS.rest;
 }
 
+/** Safely convert any value to a renderable string — prevents React error #31 from nested objects */
+function safeStr(val) {
+  if (val == null) return '';
+  if (typeof val === 'object') return JSON.stringify(val);
+  return String(val);
+}
+
 export default function CalendarPage() {
   const { athleteId: paramAthleteId } = useParams();
   const { isCoach } = useAuth();
@@ -188,15 +195,15 @@ export default function CalendarPage() {
   function startEdit(workout) {
     setEditingWorkout(workout);
     setEditForm({
-      title: workout.title || '',
+      title: safeStr(workout.title),
       workout_type: workout.workout_type || 'easy',
       distance_km: workout.distance_km || '',
       duration_minutes: workout.duration_minutes || '',
       pace_range_min: workout.pace_range_min || '',
       pace_range_max: workout.pace_range_max || '',
-      hr_zone: workout.hr_zone || '',
-      description: workout.description || '',
-      coach_notes: workout.coach_notes || '',
+      hr_zone: safeStr(workout.hr_zone),
+      description: safeStr(workout.description),
+      coach_notes: safeStr(workout.coach_notes),
     });
   }
 
@@ -404,7 +411,7 @@ export default function CalendarPage() {
                     <p className={`text-xs font-bold uppercase ${colors.text}`}>
                       {getColors(workout.workout_type).label}
                     </p>
-                    <p className="text-white text-sm font-semibold mt-1 line-clamp-2">{workout.title}</p>
+                    <p className="text-white text-sm font-semibold mt-1 line-clamp-2">{safeStr(workout.title)}</p>
 
                     {workout.distance_km > 0 && (
                       <p className="text-volt text-lg font-display mt-2">{workout.distance_km}KM</p>
