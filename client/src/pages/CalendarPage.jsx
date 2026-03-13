@@ -8,7 +8,7 @@ import WorkoutDetailPanel from '../components/WorkoutDetailPanel';
 import StrengthSessionModal from '../components/StrengthSessionModal';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Check, X, Edit3, Save,
-  Calendar as CalendarIcon, LayoutGrid, Flag, MessageSquare, Dumbbell,
+  Calendar as CalendarIcon, LayoutGrid, Flag, MessageSquare, Plus,
 } from 'lucide-react';
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval,
@@ -40,6 +40,30 @@ function safeStr(val) {
   if (val == null) return '';
   if (typeof val === 'object') return JSON.stringify(val);
   return String(val);
+}
+
+/* ─── Activity type colors (logged activities) ─── */
+const ACTIVITY_COLORS = {
+  easy_run:  { bg: 'bg-green-500/20',   border: 'border-green-500',   text: 'text-green-400',   label: 'Easy Run',  abbrev: 'EASY' },
+  long_run:  { bg: 'bg-blue-500/20',    border: 'border-blue-500',    text: 'text-blue-400',    label: 'Long Run',  abbrev: 'LONG' },
+  race:      { bg: 'bg-volt/20',        border: 'border-volt',        text: 'text-volt',        label: 'Race',      abbrev: 'RACE' },
+  strength:  { bg: 'bg-purple-500/20',  border: 'border-purple-500',  text: 'text-purple-400',  label: 'Strength',  abbrev: 'STR' },
+  pilates:   { bg: 'bg-pink-500/20',    border: 'border-pink-500',    text: 'text-pink-400',    label: 'Pilates',   abbrev: 'PIL' },
+  cycling:   { bg: 'bg-cyan-500/20',    border: 'border-cyan-500',    text: 'text-cyan-400',    label: 'Cycling',   abbrev: 'CYC' },
+  swimming:  { bg: 'bg-sky-500/20',     border: 'border-sky-500',     text: 'text-sky-400',     label: 'Swimming',  abbrev: 'SWIM' },
+  walking:   { bg: 'bg-emerald-500/20', border: 'border-emerald-500', text: 'text-emerald-400', label: 'Walking',   abbrev: 'WALK' },
+  other:     { bg: 'bg-gray-500/20',    border: 'border-gray-500',    text: 'text-gray-400',    label: 'Other',     abbrev: 'OTH' },
+};
+
+function getActivityColors(type) {
+  return ACTIVITY_COLORS[type] || ACTIVITY_COLORS.other;
+}
+
+function formatPaceFromSec(totalSec) {
+  if (!totalSec) return '';
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${min}:${String(sec).padStart(2, '0')}`;
 }
 
 export default function CalendarPage() {
@@ -106,11 +130,12 @@ export default function CalendarPage() {
     return map;
   }, [plan]);
 
-  /* ─── Build strength session lookup by date ─── */
-  const strengthByDate = useMemo(() => {
+  /* ─── Build activities lookup by date (array per date) ─── */
+  const activitiesByDate = useMemo(() => {
     const map = {};
     for (const s of strengthSessions) {
-      map[s.session_date] = s;
+      if (!map[s.session_date]) map[s.session_date] = [];
+      map[s.session_date].push(s);
     }
     return map;
   }, [strengthSessions]);
@@ -302,9 +327,9 @@ export default function CalendarPage() {
           {!isCoach && (
             <button
               onClick={() => { setStrengthModalDate(null); setEditingStrength(null); setShowStrengthModal(true); }}
-              className="px-3 py-2 border border-purple-500 text-purple-400 hover:bg-purple-500/20 text-xs uppercase font-bold tracking-wider transition-colors flex items-center gap-1 min-h-[44px]"
+              className="px-3 py-2 border border-volt text-volt hover:bg-volt/20 text-xs uppercase font-bold tracking-wider transition-colors flex items-center gap-1 min-h-[44px]"
             >
-              <Dumbbell size={14} /> Strength
+              <Plus size={14} /> Log Activity
             </button>
           )}
         </div>
@@ -441,29 +466,40 @@ export default function CalendarPage() {
                   <p className="text-smoke/50 text-xs uppercase mt-4">Rest</p>
                 )}
 
-                {/* Strength session block */}
-                {strengthByDate[key] && (
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!isCoach) {
-                        setEditingStrength(strengthByDate[key]);
-                        setStrengthModalDate(key);
-                        setShowStrengthModal(true);
-                      }
-                    }}
-                    className="mt-2 bg-purple-500/20 border-l-2 border-purple-500 px-2 py-1.5 cursor-pointer hover:bg-purple-500/30 transition-colors"
-                  >
-                    <div className="flex items-center gap-1">
-                      <Dumbbell size={10} className="text-purple-400" />
-                      <span className="text-purple-400 text-[10px] font-bold uppercase">Strength</span>
+                {/* Logged activity blocks */}
+                {activitiesByDate[key]?.map((act) => {
+                  const ac = getActivityColors(act.activity_type);
+                  const isRunType = ['easy_run', 'long_run', 'race'].includes(act.activity_type);
+                  return (
+                    <div
+                      key={act.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!isCoach) {
+                          setEditingStrength(act);
+                          setStrengthModalDate(key);
+                          setShowStrengthModal(true);
+                        }
+                      }}
+                      className={`mt-2 ${ac.bg} border-l-2 ${ac.border} px-2 py-1.5 cursor-pointer hover:brightness-125 transition-all`}
+                    >
+                      <span className={`${ac.text} text-[10px] font-bold uppercase`}>{ac.label}</span>
+                      <p className="text-white text-xs mt-0.5">
+                        {isRunType && act.distance_km ? (
+                          <>
+                            {act.distance_km}km
+                            {act.avg_pace_sec ? <span className="text-smoke ml-1">{formatPaceFromSec(act.avg_pace_sec)}/km</span> : null}
+                          </>
+                        ) : (
+                          <>
+                            {act.duration_minutes}min
+                            <span className={`${ac.text} ml-1 capitalize`}>{act.intensity}</span>
+                          </>
+                        )}
+                      </p>
                     </div>
-                    <p className="text-white text-xs mt-0.5">
-                      {strengthByDate[key].duration_minutes}min
-                      <span className="text-purple-300 ml-1 capitalize">{strengthByDate[key].intensity}</span>
-                    </p>
-                  </div>
-                )}
+                  );
+                })}
               </div>
             );
           })}
@@ -520,17 +556,29 @@ export default function CalendarPage() {
                     </div>
                   )}
 
-                  {strengthByDate[key] && (
-                    <div className="bg-purple-500/20 border-l-2 border-purple-500 px-0.5 sm:px-1.5 py-0.5 sm:py-1 mt-0.5">
-                      <div className="flex items-center gap-0.5">
-                        <Dumbbell size={8} className="text-purple-400" />
-                        <span className="text-[8px] sm:text-[10px] font-bold uppercase text-purple-400">STR</span>
+                  {activitiesByDate[key]?.map((act) => {
+                    const ac = getActivityColors(act.activity_type);
+                    const isRunType = ['easy_run', 'long_run', 'race'].includes(act.activity_type);
+                    return (
+                      <div
+                        key={act.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isCoach) {
+                            setEditingStrength(act);
+                            setStrengthModalDate(key);
+                            setShowStrengthModal(true);
+                          }
+                        }}
+                        className={`${ac.bg} border-l-2 ${ac.border} px-0.5 sm:px-1.5 py-0.5 sm:py-1 mt-0.5 cursor-pointer`}
+                      >
+                        <span className={`text-[8px] sm:text-[10px] font-bold uppercase ${ac.text}`}>{ac.abbrev}</span>
+                        <p className="text-white text-[8px] sm:text-[10px] hidden sm:block">
+                          {isRunType && act.distance_km ? `${act.distance_km}km` : `${act.duration_minutes}m`}
+                        </p>
                       </div>
-                      <p className="text-white text-[8px] sm:text-[10px] hidden sm:block">
-                        {strengthByDate[key].duration_minutes}m
-                      </p>
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
               );
             })}

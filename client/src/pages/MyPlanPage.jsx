@@ -7,7 +7,7 @@ import { formatPace, formatTime, normalizeDescriptionPace } from '../lib/vdot';
 import WorkoutFeedbackModal from '../components/athletes/WorkoutFeedbackModal';
 import WorkoutDetailPanel from '../components/WorkoutDetailPanel';
 import StrengthSessionModal from '../components/StrengthSessionModal';
-import { Calendar, Check, Zap, MessageSquare, ClipboardCheck, BarChart3, User, Dumbbell } from 'lucide-react';
+import { Calendar, Check, Zap, MessageSquare, ClipboardCheck, BarChart3, User, Plus } from 'lucide-react';
 import { getOverallProgress } from '@shared/onboardingProgress';
 
 const WORKOUT_COLORS = {
@@ -34,6 +34,30 @@ function safeStr(val) {
   if (val == null) return '';
   if (typeof val === 'object') return JSON.stringify(val);
   return String(val);
+}
+
+/* ─── Activity type colors (logged activities) ─── */
+const ACTIVITY_COLORS = {
+  easy_run:  { bg: 'bg-green-500/20',   border: 'border-green-500',   text: 'text-green-400',   label: 'Easy Run',  abbrev: 'EASY' },
+  long_run:  { bg: 'bg-blue-500/20',    border: 'border-blue-500',    text: 'text-blue-400',    label: 'Long Run',  abbrev: 'LONG' },
+  race:      { bg: 'bg-volt/20',        border: 'border-volt',        text: 'text-volt',        label: 'Race',      abbrev: 'RACE' },
+  strength:  { bg: 'bg-purple-500/20',  border: 'border-purple-500',  text: 'text-purple-400',  label: 'Strength',  abbrev: 'STR' },
+  pilates:   { bg: 'bg-pink-500/20',    border: 'border-pink-500',    text: 'text-pink-400',    label: 'Pilates',   abbrev: 'PIL' },
+  cycling:   { bg: 'bg-cyan-500/20',    border: 'border-cyan-500',    text: 'text-cyan-400',    label: 'Cycling',   abbrev: 'CYC' },
+  swimming:  { bg: 'bg-sky-500/20',     border: 'border-sky-500',     text: 'text-sky-400',     label: 'Swimming',  abbrev: 'SWIM' },
+  walking:   { bg: 'bg-emerald-500/20', border: 'border-emerald-500', text: 'text-emerald-400', label: 'Walking',   abbrev: 'WALK' },
+  other:     { bg: 'bg-gray-500/20',    border: 'border-gray-500',    text: 'text-gray-400',    label: 'Other',     abbrev: 'OTH' },
+};
+
+function getActivityColors(type) {
+  return ACTIVITY_COLORS[type] || ACTIVITY_COLORS.other;
+}
+
+function formatPaceFromSec(totalSec) {
+  if (!totalSec) return '';
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${min}:${String(sec).padStart(2, '0')}`;
 }
 
 export default function MyPlanPage() {
@@ -178,10 +202,13 @@ export default function MyPlanPage() {
   const today = toLocalDateStr(new Date());
   const todayWorkout = thisWeekWorkouts.find(w => w.workout_date === today);
 
-  // Build strength lookup by date
-  const strengthByDate = {};
-  for (const s of strengthSessions) { strengthByDate[s.session_date] = s; }
-  const todayStrength = strengthByDate[today];
+  // Build activities lookup by date (array per date)
+  const activitiesByDate = {};
+  for (const s of strengthSessions) {
+    if (!activitiesByDate[s.session_date]) activitiesByDate[s.session_date] = [];
+    activitiesByDate[s.session_date].push(s);
+  }
+  const todayActivities = activitiesByDate[today] || [];
 
   // Compute date string for each day slot (Mon=0 .. Sun=6)
   const monday = getMonday(new Date());
@@ -289,29 +316,38 @@ export default function MyPlanPage() {
         </div>
       )}
 
-      {/* Today's strength session */}
-      {todayStrength && (
-        <div
-          className="border-l-4 border-purple-500 bg-purple-500/10 p-4 sm:p-6 mb-6 sm:mb-8 cursor-pointer hover:bg-purple-500/15 transition-colors"
-          onClick={() => { setEditingStrength(todayStrength); setShowStrengthModal(true); }}
-        >
-          <p className="text-smoke text-xs uppercase tracking-wider mb-1">TODAY — STRENGTH</p>
-          <div className="flex items-center gap-3">
-            <Dumbbell size={20} className="text-purple-400" />
-            <span className="text-lg font-bold text-purple-400">{todayStrength.duration_minutes}min</span>
-            <span className="text-purple-300 capitalize">{todayStrength.intensity}</span>
+      {/* Today's logged activities */}
+      {todayActivities.map((act) => {
+        const ac = getActivityColors(act.activity_type);
+        const isRunType = ['easy_run', 'long_run', 'race'].includes(act.activity_type);
+        return (
+          <div
+            key={act.id}
+            className={`border-l-4 ${ac.border} ${ac.bg} p-4 sm:p-6 mb-4 cursor-pointer hover:brightness-125 transition-all`}
+            onClick={() => { setEditingStrength(act); setShowStrengthModal(true); }}
+          >
+            <p className="text-smoke text-xs uppercase tracking-wider mb-1">TODAY — {ac.label.toUpperCase()}</p>
+            <div className="flex items-center gap-3">
+              <span className={`text-lg font-bold ${ac.text}`}>
+                {isRunType && act.distance_km ? `${act.distance_km}km` : `${act.duration_minutes}min`}
+              </span>
+              {isRunType && act.avg_pace_sec && (
+                <span className="text-smoke">{formatPaceFromSec(act.avg_pace_sec)}/km</span>
+              )}
+              {!isRunType && <span className={`${ac.text} capitalize`}>{act.intensity}</span>}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })}
 
       {/* This week */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-display text-xl">THIS WEEK</h2>
         <button
           onClick={() => { setEditingStrength(null); setShowStrengthModal(true); }}
-          className="px-3 py-2 border border-purple-500 text-purple-400 hover:bg-purple-500/20 text-xs uppercase font-bold tracking-wider transition-colors flex items-center gap-1"
+          className="px-3 py-2 border border-volt text-volt hover:bg-volt/20 text-xs uppercase font-bold tracking-wider transition-colors flex items-center gap-1"
         >
-          <Dumbbell size={14} /> Strength
+          <Plus size={14} /> Log Activity
         </button>
       </div>
 
@@ -320,7 +356,7 @@ export default function MyPlanPage() {
         {DAY_NAMES.map((day, i) => {
           const dateStr = weekDateStrs[i];
           const workout = thisWeekWorkouts.find(w => w.workout_date === dateStr);
-          const strength = strengthByDate[dateStr];
+          const dayActivities = activitiesByDate[dateStr] || [];
 
           const isTodayRow = dateStr === today;
           const colors = workout ? (WORKOUT_COLORS[workout.workout_type] || 'border-ash bg-ash/20') : 'border-ash/50';
@@ -369,17 +405,26 @@ export default function MyPlanPage() {
                 </div>
               )}
             </div>
-              {strength && (
-                <div
-                  onClick={() => { setEditingStrength(strength); setShowStrengthModal(true); }}
-                  className="border-l-4 border-purple-500 bg-purple-500/10 p-2 flex items-center gap-2 cursor-pointer hover:bg-purple-500/15 transition-colors"
-                >
-                  <Dumbbell size={12} className="text-purple-400" />
-                  <span className="text-purple-400 text-xs font-bold uppercase">Strength</span>
-                  <span className="text-white text-xs">{strength.duration_minutes}min</span>
-                  <span className="text-purple-300 text-xs capitalize">{strength.intensity}</span>
-                </div>
-              )}
+              {dayActivities.map((act) => {
+                const ac = getActivityColors(act.activity_type);
+                const isRunType = ['easy_run', 'long_run', 'race'].includes(act.activity_type);
+                return (
+                  <div
+                    key={act.id}
+                    onClick={() => { setEditingStrength(act); setShowStrengthModal(true); }}
+                    className={`border-l-4 ${ac.border} ${ac.bg} p-2 flex items-center gap-2 cursor-pointer hover:brightness-125 transition-all`}
+                  >
+                    <span className={`${ac.text} text-xs font-bold uppercase`}>{ac.label}</span>
+                    <span className="text-white text-xs">
+                      {isRunType && act.distance_km ? `${act.distance_km}km` : `${act.duration_minutes}min`}
+                    </span>
+                    {isRunType && act.avg_pace_sec && (
+                      <span className="text-smoke text-xs">{formatPaceFromSec(act.avg_pace_sec)}/km</span>
+                    )}
+                    {!isRunType && <span className={`${ac.text} text-xs capitalize`}>{act.intensity}</span>}
+                  </div>
+                );
+              })}
             </div>
           );
         })}
@@ -390,7 +435,7 @@ export default function MyPlanPage() {
         {DAY_NAMES.map((day, i) => {
           const dateStr = weekDateStrs[i];
           const workout = thisWeekWorkouts.find(w => w.workout_date === dateStr);
-          const strength = strengthByDate[dateStr];
+          const dayActivities = activitiesByDate[dateStr] || [];
 
           const isTodayCol = dateStr === today;
           const colors = workout ? (WORKOUT_COLORS[workout.workout_type] || 'border-ash bg-ash/20') : 'border-ash/50';
@@ -437,21 +482,24 @@ export default function MyPlanPage() {
                 <p className="text-smoke/50 text-xs">—</p>
               )}
 
-              {/* Strength session block */}
-              {strength && (
-                <div
-                  onClick={(e) => { e.stopPropagation(); setEditingStrength(strength); setShowStrengthModal(true); }}
-                  className="mt-2 bg-purple-500/20 border-l-2 border-purple-500 px-2 py-1 cursor-pointer hover:bg-purple-500/30 transition-colors"
-                >
-                  <div className="flex items-center gap-1">
-                    <Dumbbell size={10} className="text-purple-400" />
-                    <span className="text-purple-400 text-[10px] font-bold uppercase">STR</span>
+              {/* Logged activity blocks */}
+              {dayActivities.map((act) => {
+                const ac = getActivityColors(act.activity_type);
+                const isRunType = ['easy_run', 'long_run', 'race'].includes(act.activity_type);
+                return (
+                  <div
+                    key={act.id}
+                    onClick={(e) => { e.stopPropagation(); setEditingStrength(act); setShowStrengthModal(true); }}
+                    className={`mt-2 ${ac.bg} border-l-2 ${ac.border} px-2 py-1 cursor-pointer hover:brightness-125 transition-all`}
+                  >
+                    <span className={`${ac.text} text-[10px] font-bold uppercase`}>{ac.abbrev}</span>
+                    <p className="text-white text-[10px] mt-0.5">
+                      {isRunType && act.distance_km ? `${act.distance_km}km` : `${act.duration_minutes}m`}
+                      {!isRunType && <span className={`${ac.text} capitalize ml-1`}>{act.intensity}</span>}
+                    </p>
                   </div>
-                  <p className="text-white text-[10px] mt-0.5">
-                    {strength.duration_minutes}m <span className="text-purple-300 capitalize">{strength.intensity}</span>
-                  </p>
-                </div>
-              )}
+                );
+              })}
             </div>
           );
         })}

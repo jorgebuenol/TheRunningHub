@@ -71,7 +71,7 @@ export async function getAthleteMonitoringSummary(supabase, athleteId) {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const today = now.toISOString().split('T')[0];
 
-  const [readinessResult, workoutsResult, feedbackResult] = await Promise.all([
+  const [readinessResult, workoutsResult, feedbackResult, activitiesResult] = await Promise.all([
     // Last 30 days readiness
     supabase
       .from('daily_readiness')
@@ -95,14 +95,25 @@ export async function getAthleteMonitoringSummary(supabase, athleteId) {
       .eq('athlete_id', athleteId)
       .order('created_at', { ascending: false })
       .limit(50),
+
+    // Last 42 days logged activities (strength_sessions with distance)
+    supabase
+      .from('strength_sessions')
+      .select('session_date, distance_km, activity_type, duration_minutes')
+      .eq('athlete_id', athleteId)
+      .gte('session_date', fortyTwoDaysAgo.toISOString().split('T')[0]),
   ]);
 
   const readiness = readinessResult.data || [];
   const workouts = workoutsResult.data || [];
   const feedback = feedbackResult.data || [];
+  const loggedActivities = activitiesResult.data || [];
 
-  // ACWR
-  const acwr = calculateACWR(workouts);
+  // Merge logged activities with distance into workouts for ACWR
+  const activitiesWithDistance = loggedActivities
+    .filter(a => a.distance_km && parseFloat(a.distance_km) > 0)
+    .map(a => ({ workout_date: a.session_date, distance_km: a.distance_km, status: 'completed' }));
+  const acwr = calculateACWR([...workouts, ...activitiesWithDistance]);
 
   // Readiness trend (last 7 days)
   const recentReadiness = readiness.filter(r =>
@@ -136,8 +147,8 @@ export async function getAthleteMonitoringSummary(supabase, athleteId) {
     ? Math.round((completedThisWeek.length / plannedThisWeek.length) * 100)
     : null;
 
-  // --- New: Weekly KM history (last 6 weeks) ---
-  const weeklyKmHistory = getWeeklyKmHistory(workouts);
+  // --- New: Weekly KM history (last 6 weeks, including logged activities) ---
+  const weeklyKmHistory = getWeeklyKmHistory(workouts, loggedActivities);
 
   // --- New: RPE 7-day trend ---
   const rpe7dTrend = build7dRpeTrend(feedback, now);
@@ -197,7 +208,7 @@ export async function getAthleteMonitoringSummary(supabase, athleteId) {
 /**
  * Weekly KM history for the last 6 weeks (bar chart data)
  */
-function getWeeklyKmHistory(workouts) {
+function getWeeklyKmHistory(workouts, loggedActivities = []) {
   const today = new Date();
   const history = [];
 
@@ -219,7 +230,16 @@ function getWeeklyKmHistory(workouts) {
       wk.workout_date <= endStr
     );
 
-    const km = weekWorkouts.reduce((sum, wk) => sum + parseFloat(wk.distance_km || 0), 0);
+    let km = weekWorkouts.reduce((sum, wk) => sum + parseFloat(wk.distance_km || 0), 0);
+
+    // Add km from logged activities (strength_sessions with distance)
+    const weekActivities = loggedActivities.filter(a =>
+      a.session_date >= startStr &&
+      a.session_date <= endStr &&
+      a.distance_km && parseFloat(a.distance_km) > 0
+    );
+    km += weekActivities.reduce((sum, a) => sum + parseFloat(a.distance_km), 0);
+
     const label = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     history.push({ week: label, km: round1(km) });
   }
@@ -306,7 +326,7 @@ export async function getDashboardFlags(supabase, athleteId) {
   const twentyEightDaysAgo = new Date();
   twentyEightDaysAgo.setDate(twentyEightDaysAgo.getDate() - 28);
 
-  const [readinessResult, workoutsResult, feedbackResult] = await Promise.all([
+  const [readinessResult, workoutsResult, feedbackResult, activitiesResult] = await Promise.all([
     // Last 7 days readiness (expanded from just today)
     supabase
       .from('daily_readiness')
@@ -329,14 +349,26 @@ export async function getDashboardFlags(supabase, athleteId) {
       .eq('athlete_id', athleteId)
       .order('created_at', { ascending: false })
       .limit(7),
+
+    // Last 28 days logged activities with distance
+    supabase
+      .from('strength_sessions')
+      .select('session_date, distance_km')
+      .eq('athlete_id', athleteId)
+      .gte('session_date', twentyEightDaysAgo.toISOString().split('T')[0]),
   ]);
 
   const readiness7d = readinessResult.data || [];
   const todayReadiness = readiness7d.find(r => r.check_in_date === today);
   const workouts = workoutsResult.data || [];
   const recentFeedback = feedbackResult.data || [];
+  const loggedActivities = activitiesResult.data || [];
 
-  const acwr = calculateACWR(workouts);
+  // Merge logged activities with distance into workouts for ACWR
+  const activitiesWithDistance = loggedActivities
+    .filter(a => a.distance_km && parseFloat(a.distance_km) > 0)
+    .map(a => ({ workout_date: a.session_date, distance_km: a.distance_km, status: 'completed' }));
+  const acwr = calculateACWR([...workouts, ...activitiesWithDistance]);
   const avgRpe = recentFeedback.length > 0
     ? Math.round((recentFeedback.reduce((sum, f) => sum + f.rpe, 0) / recentFeedback.length) * 10) / 10
     : null;

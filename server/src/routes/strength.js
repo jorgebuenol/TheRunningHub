@@ -24,12 +24,19 @@ strengthRoutes.post('/', async (req, res, next) => {
       session_date: body.session_date || new Date().toISOString().split('T')[0],
       duration_minutes: body.duration_minutes,
       intensity: body.intensity,
+      activity_type: body.activity_type || 'strength',
+      distance_km: body.distance_km || null,
+      avg_pace_sec: body.avg_pace_sec || null,
+      avg_hr: body.avg_hr || null,
+      max_hr: body.max_hr || null,
+      elevation_m: body.elevation_m || null,
+      notes: body.notes || null,
     };
 
-    // Upsert — allow updating same-day session
+    // Upsert — allow updating same-day same-activity-type session
     const { data, error } = await req.supabase
       .from('strength_sessions')
-      .upsert(sessionData, { onConflict: 'athlete_id,session_date' })
+      .upsert(sessionData, { onConflict: 'athlete_id,session_date,activity_type' })
       .select()
       .single();
 
