@@ -187,7 +187,7 @@ export default function CoachProgressPage() {
             Completed
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-3 h-3 inline-block border border-smoke/50" />
+            <svg width="12" height="12" className="inline-block"><rect width="12" height="12" fill="#1a1a1a" stroke="#555" strokeWidth="1" /><circle cx="3" cy="3" r="1" fill="#555" /><circle cx="9" cy="9" r="1" fill="#555" /><circle cx="3" cy="9" r="1" fill="#555" /><circle cx="9" cy="3" r="1" fill="#555" /></svg>
             Planned
           </span>
           <span className="flex items-center gap-1">
@@ -198,6 +198,12 @@ export default function CoachProgressPage() {
         {weekly_volume.some(w => w.planned_km > 0 || w.completed_km > 0) ? (
           <ResponsiveContainer width="100%" height={280}>
             <ComposedChart data={weekly_volume} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+              <defs>
+                <pattern id="dotPattern" patternUnits="userSpaceOnUse" width="6" height="6">
+                  <rect width="6" height="6" fill="transparent" />
+                  <circle cx="3" cy="3" r="1" fill="#555" />
+                </pattern>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
               <XAxis dataKey="label" tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE} />
               <YAxis yAxisId="km" tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE} />
@@ -209,7 +215,7 @@ export default function CoachProgressPage() {
               <ReferenceArea yAxisId="acwr" y1={0.8} y2={1.3} fill="#4ADE80" fillOpacity={0.08} />
               <ReferenceLine yAxisId="acwr" y={1.3} stroke="#FACC15" strokeDasharray="3 3" strokeWidth={1} />
               <ReferenceLine yAxisId="acwr" y={0.8} stroke="#FACC15" strokeDasharray="3 3" strokeWidth={1} />
-              <Bar yAxisId="km" dataKey="planned_km" fill="transparent" stroke="#555" strokeWidth={1} radius={[0, 0, 0, 0]} />
+              <Bar yAxisId="km" dataKey="planned_km" fill="url(#dotPattern)" stroke="#555" strokeWidth={1} radius={[0, 0, 0, 0]} />
               <Bar yAxisId="km" dataKey="completed_km" fill="#CCFF00" fillOpacity={0.8} radius={[0, 0, 0, 0]} />
               <Line yAxisId="acwr" type="monotone" dataKey="acwr" stroke="#60A5FA" strokeWidth={2} dot={{ fill: '#60A5FA', r: 3 }} connectNulls />
             </ComposedChart>
