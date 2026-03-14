@@ -181,7 +181,20 @@ export default function CoachProgressPage() {
           <BarChart3 size={18} className="text-volt" />
           WEEKLY VOLUME — LAST 8 WEEKS
         </h2>
-        <p className="text-smoke text-xs mb-4">Completed km (bars) vs Planned km (outline) with ACWR line</p>
+        <div className="flex items-center gap-4 text-xs text-smoke mb-4">
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 inline-block bg-volt" />
+            Completed
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 inline-block border border-smoke/50" />
+            Planned
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-1 inline-block bg-blue-400" />
+            ACWR
+          </span>
+        </div>
         {weekly_volume.some(w => w.planned_km > 0 || w.completed_km > 0) ? (
           <ResponsiveContainer width="100%" height={280}>
             <ComposedChart data={weekly_volume} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>

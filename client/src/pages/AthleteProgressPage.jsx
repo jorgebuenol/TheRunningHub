@@ -117,8 +117,18 @@ export default function AthleteProgressPage() {
           <Flame size={18} className="text-volt" />
           WEEKLY KM
         </h2>
-        <p className="text-smoke text-xs mb-4">Last 8 weeks</p>
-        {weekly_volume.some(w => w.completed_km > 0) ? (
+        <div className="flex items-center gap-4 text-xs text-smoke mb-4">
+          <span>Last 8 weeks</span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 inline-block bg-volt" />
+            Completed
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 inline-block border border-smoke/50" />
+            Planned
+          </span>
+        </div>
+        {weekly_volume.some(w => w.completed_km > 0 || w.planned_km > 0) ? (
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={weekly_volume} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
@@ -126,9 +136,10 @@ export default function AthleteProgressPage() {
               <YAxis tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE} />
               <Tooltip
                 contentStyle={{ background: '#111', border: '1px solid #333', fontSize: 12, fontFamily: 'Barlow Condensed' }}
-                formatter={(v) => [`${v} km`, 'Completed']}
+                formatter={(v, name) => [`${v} km`, name === 'completed_km' ? 'Completed' : 'Planned']}
                 labelStyle={{ color: '#888' }}
               />
+              <Bar dataKey="planned_km" fill="transparent" stroke="#555" strokeWidth={1} radius={[0, 0, 0, 0]} />
               <Bar dataKey="completed_km" fill="#CCFF00" radius={[0, 0, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
