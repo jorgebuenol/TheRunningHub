@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { coachOnly } from '../middleware/auth.js';
 import { getBestVDOT, getTrainingPaces } from '../utils/vdot.js';
 import { isOnboardingComplete } from '../utils/onboardingProgress.js';
+import { syncAthletePaces } from '../services/paceSync.js';
 
 export const athleteRoutes = Router();
 
@@ -219,6 +220,7 @@ athleteRoutes.patch('/:id', async (req, res, next) => {
     }
 
     // Recalculate VDOT if race times changed
+    let newPaces = null;
     if (updates.time_5k || updates.time_10k || updates.time_half_marathon || updates.time_marathon) {
       const { data: current } = await req.supabase
         .from('athletes')
@@ -234,8 +236,8 @@ athleteRoutes.patch('/:id', async (req, res, next) => {
       };
 
       const vdot = getBestVDOT(raceTimes);
-      const paces = getTrainingPaces(vdot);
-      updates = { ...updates, vdot, ...paces };
+      newPaces = getTrainingPaces(vdot);
+      updates = { ...updates, vdot, ...newPaces };
     }
 
     const { data, error } = await req.supabase
@@ -246,6 +248,11 @@ athleteRoutes.patch('/:id', async (req, res, next) => {
       .single();
 
     if (error) throw error;
+
+    // Sync paces to all future uncompleted workouts
+    if (newPaces) {
+      await syncAthletePaces(req.supabase, req.params.id, newPaces);
+    }
 
     // Update onboarding_completed_at based on current state
     const complete = isOnboardingComplete(data);
@@ -262,6 +269,34 @@ athleteRoutes.patch('/:id', async (req, res, next) => {
     }
 
     res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST sync paces — recalculates from current VDOT and updates all future workouts
+athleteRoutes.post('/:id/sync-paces', coachOnly, async (req, res, next) => {
+  try {
+    const { data: athlete, error } = await req.supabase
+      .from('athletes')
+      .select('id, vdot, pace_easy_min, pace_easy_max, pace_tempo, pace_lt, pace_race, pace_vo2max')
+      .eq('id', req.params.id)
+      .single();
+
+    if (error || !athlete) return res.status(404).json({ message: 'Athlete not found' });
+    if (!athlete.vdot) return res.status(400).json({ message: 'No VDOT set for this athlete' });
+
+    const paces = {
+      pace_easy_min: athlete.pace_easy_min,
+      pace_easy_max: athlete.pace_easy_max,
+      pace_tempo: athlete.pace_tempo,
+      pace_lt: athlete.pace_lt,
+      pace_race: athlete.pace_race,
+      pace_vo2max: athlete.pace_vo2max,
+    };
+
+    const result = await syncAthletePaces(req.supabase, req.params.id, paces);
+    res.json({ message: `Synced ${result.updated} workouts`, ...result });
   } catch (err) {
     next(err);
   }
