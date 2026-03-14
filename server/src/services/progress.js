@@ -4,6 +4,11 @@
 
 function round1(n) { return Math.round(n * 10) / 10; }
 
+/** Format date as YYYY-MM-DD in LOCAL timezone (not UTC) */
+function toDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /**
  * Get full progress data for an athlete (used by both coach + athlete views)
  */
@@ -32,12 +37,13 @@ export async function getAthleteProgress(supabase, athleteId) {
   // 3. Fetch all workouts for this athlete in the last ~60 days (covers 8 weeks)
   const sixtyDaysAgo = new Date();
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  const sixtyDaysAgoStr = toDateStr(sixtyDaysAgo);
 
   const { data: allWorkouts } = await supabase
     .from('workouts')
     .select('id, plan_week_id, workout_type, distance_km, actual_distance_km, actual_avg_pace, status, workout_date, day_of_week')
     .eq('athlete_id', athleteId)
-    .gte('workout_date', sixtyDaysAgo.toISOString().split('T')[0])
+    .gte('workout_date', sixtyDaysAgoStr)
     .order('workout_date', { ascending: true });
 
   const workouts = allWorkouts || [];
@@ -52,8 +58,10 @@ export async function getAthleteProgress(supabase, athleteId) {
 
   const feedback = feedbackRows || [];
 
-  // --- Build weekly buckets (last 8 weeks, aligned to Mon-Sun) ---
+  // --- Build weekly buckets (last 8 weeks ending at CURRENT week, aligned Mon-Sun) ---
+  // Always anchored to today — never to plan start date.
   const today = new Date();
+  const todayStr = toDateStr(today);
   const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon
   const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
   const thisMonday = new Date(today);
@@ -67,8 +75,9 @@ export async function getAthleteProgress(supabase, athleteId) {
     const sundayDate = new Date(mondayDate);
     sundayDate.setDate(mondayDate.getDate() + 6);
 
-    const monStr = mondayDate.toISOString().split('T')[0];
-    const sunStr = sundayDate.toISOString().split('T')[0];
+    // Use local timezone for date strings (avoids UTC shift bugs)
+    const monStr = toDateStr(mondayDate);
+    const sunStr = toDateStr(sundayDate);
 
     const weekWorkouts = workouts.filter(wo =>
       wo.workout_date >= monStr && wo.workout_date <= sunStr
@@ -102,7 +111,9 @@ export async function getAthleteProgress(supabase, athleteId) {
       ? round1(weekFeedback.reduce((s, f) => s + f.rpe, 0) / weekFeedback.length)
       : null;
 
-    const label = mondayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    // Current week (w=0) labeled "Now" to show it covers up to today
+    const baseLabel = mondayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const label = w === 0 ? 'Now' : baseLabel;
     const weekNum = planWeek?.week_number || null;
 
     weekBuckets.push({
@@ -121,7 +132,7 @@ export async function getAthleteProgress(supabase, athleteId) {
   for (let i = 0; i < weekBuckets.length; i++) {
     const weekEnd = new Date(thisMonday);
     weekEnd.setDate(thisMonday.getDate() - (7 - i) * 7 + 6);
-    const weekEndStr = weekEnd.toISOString().split('T')[0];
+    const weekEndStr = toDateStr(weekEnd);
 
     const acute7 = workouts
       .filter(wo => {
@@ -184,11 +195,10 @@ export async function getAthleteProgress(supabase, athleteId) {
 
   // --- Workout type breakdown for current phase ---
   const currentPhase = (weeks || []).find(pw => {
-    const now = new Date().toISOString().split('T')[0];
     if (!pw.start_date) return false;
     const end = new Date(pw.start_date);
     end.setDate(end.getDate() + 6);
-    return pw.start_date <= now && end.toISOString().split('T')[0] >= now;
+    return pw.start_date <= todayStr && toDateStr(end) >= todayStr;
   });
 
   const phaseToUse = currentPhase?.phase || (weeks || []).filter(pw => pw.is_generated).pop()?.phase || null;
@@ -215,7 +225,7 @@ export async function getAthleteProgress(supabase, athleteId) {
     .select('distance_km, actual_distance_km, status, plan_week_id')
     .eq('athlete_id', athleteId)
     .eq('status', 'completed')
-    .lt('workout_date', sixtyDaysAgo.toISOString().split('T')[0]);
+    .lt('workout_date', sixtyDaysAgoStr);
 
   const allCycleWorkouts = [
     ...cycleWorkouts,
@@ -234,12 +244,11 @@ export async function getAthleteProgress(supabase, athleteId) {
   // Determine current week number
   let currentWeekNumber = null;
   if (weeks?.length) {
-    const nowStr = today.toISOString().split('T')[0];
     for (const pw of weeks) {
       if (!pw.start_date) continue;
       const end = new Date(pw.start_date);
       end.setDate(end.getDate() + 6);
-      if (pw.start_date <= nowStr && end.toISOString().split('T')[0] >= nowStr) {
+      if (pw.start_date <= todayStr && toDateStr(end) >= todayStr) {
         currentWeekNumber = pw.week_number;
         break;
       }
