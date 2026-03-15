@@ -670,15 +670,25 @@ export default function CalendarPage() {
                   onChange={e => setEditForm(f => ({ ...f, workout_type: e.target.value }))}
                   className="input-field"
                 >
-                  <option value="easy">Easy Run</option>
-                  <option value="long_run">Long Run</option>
-                  <option value="tempo">Tempo</option>
-                  <option value="intervals">Intervals</option>
-                  <option value="race_pace">Race Pace</option>
-                  <option value="recovery">Recovery</option>
-                  <option value="rest">Rest</option>
-                  <option value="cross_training">Cross Training</option>
-                  <option value="race">Race Day</option>
+                  <optgroup label="Running">
+                    <option value="easy">Easy Run</option>
+                    <option value="long_run">Long Run</option>
+                    <option value="tempo">Tempo</option>
+                    <option value="intervals">Intervals</option>
+                    <option value="race_pace">Race Pace</option>
+                    <option value="recovery">Recovery</option>
+                    <option value="race">Race Day</option>
+                  </optgroup>
+                  <optgroup label="Other">
+                    <option value="rest">Rest</option>
+                    <option value="cross_training">Cross Training</option>
+                    <option value="strength">Strength</option>
+                    <option value="pilates">Pilates</option>
+                    <option value="cycling">Cycling</option>
+                    <option value="swimming">Swimming</option>
+                    <option value="walking">Walking</option>
+                    <option value="other">Other</option>
+                  </optgroup>
                 </select>
               </div>
 
