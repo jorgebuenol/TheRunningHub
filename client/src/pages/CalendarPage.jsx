@@ -218,6 +218,23 @@ export default function CalendarPage() {
   function goPrev() { setCurrentDate(d => view === 'week' ? subWeeks(d, 1) : subMonths(d, 1)); }
   function goNext() { setCurrentDate(d => view === 'week' ? addWeeks(d, 1) : addMonths(d, 1)); }
 
+  /* ─── Pace format helpers ─── */
+  function secToMmss(sec) {
+    if (!sec) return '';
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+  function mmssToSec(str) {
+    if (!str) return null;
+    const parts = str.split(':');
+    if (parts.length !== 2) return null;
+    const m = parseInt(parts[0]);
+    const s = parseInt(parts[1]);
+    if (isNaN(m) || isNaN(s)) return null;
+    return m * 60 + s;
+  }
+
   /* ─── Coach edit ─── */
   function startEdit(workout) {
     setEditingWorkout(workout);
@@ -226,8 +243,8 @@ export default function CalendarPage() {
       workout_type: workout.workout_type || 'easy',
       distance_km: workout.distance_km || '',
       duration_minutes: workout.duration_minutes || '',
-      pace_range_min: workout.pace_range_min || '',
-      pace_range_max: workout.pace_range_max || '',
+      pace_from: secToMmss(workout.pace_range_min),
+      pace_to: secToMmss(workout.pace_range_max),
       hr_zone: safeStr(workout.hr_zone),
       description: safeStr(workout.description),
       coach_notes: safeStr(workout.coach_notes),
@@ -238,11 +255,17 @@ export default function CalendarPage() {
     if (!editingWorkout) return;
     setSaving(true);
     try {
-      const data = { ...editForm };
-      if (data.distance_km) data.distance_km = parseFloat(data.distance_km);
-      if (data.duration_minutes) data.duration_minutes = parseInt(data.duration_minutes);
-      if (data.pace_range_min) data.pace_range_min = parseInt(data.pace_range_min);
-      if (data.pace_range_max) data.pace_range_max = parseInt(data.pace_range_max);
+      const data = {
+        title: editForm.title,
+        workout_type: editForm.workout_type,
+        distance_km: editForm.distance_km ? parseFloat(editForm.distance_km) : null,
+        duration_minutes: editForm.duration_minutes ? parseInt(editForm.duration_minutes) : null,
+        pace_range_min: mmssToSec(editForm.pace_from),
+        pace_range_max: mmssToSec(editForm.pace_to),
+        hr_zone: editForm.hr_zone || null,
+        description: editForm.description,
+        coach_notes: editForm.coach_notes,
+      };
       await api.updateWorkout(editingWorkout.id, data);
       setEditingWorkout(null);
       setSelectedWorkout(null);
@@ -614,114 +637,150 @@ export default function CalendarPage() {
         />
       )}
 
-      {/* ─── Coach Inline Edit ─── */}
+      {/* ─── Coach Edit Modal ─── */}
       {editingWorkout && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display text-xl flex items-center gap-2">
-              <Edit3 size={18} className="text-volt" /> EDIT WORKOUT
-            </h2>
-            <button onClick={cancelEdit} className="text-smoke hover:text-white"><X size={20} /></button>
-          </div>
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="card max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-display text-xl flex items-center gap-2">
+                <Edit3 size={18} className="text-volt" /> EDIT WORKOUT
+              </h2>
+              <button onClick={cancelEdit} className="text-smoke hover:text-white min-h-[44px] min-w-[44px] flex items-center justify-center">
+                <X size={20} />
+              </button>
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-            <div>
-              <label className="text-smoke text-xs uppercase block mb-1">Title</label>
-              <input
-                value={editForm.title}
-                onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
-                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-smoke text-xs uppercase block mb-1">Type</label>
-              <select
-                value={editForm.workout_type}
-                onChange={e => setEditForm(f => ({ ...f, workout_type: e.target.value }))}
-                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none"
-              >
-                {Object.keys(WORKOUT_COLORS).map(t => (
-                  <option key={t} value={t}>{WORKOUT_COLORS[t].label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-smoke text-xs uppercase block mb-1">Distance (km)</label>
-              <input
-                type="number" step="0.1"
-                value={editForm.distance_km}
-                onChange={e => setEditForm(f => ({ ...f, distance_km: e.target.value }))}
-                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-smoke text-xs uppercase block mb-1">Duration (min)</label>
-              <input
-                type="number"
-                value={editForm.duration_minutes}
-                onChange={e => setEditForm(f => ({ ...f, duration_minutes: e.target.value }))}
-                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-smoke text-xs uppercase block mb-1">Pace Min (sec/km)</label>
-              <input
-                type="number"
-                value={editForm.pace_range_min}
-                onChange={e => setEditForm(f => ({ ...f, pace_range_min: e.target.value }))}
-                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-smoke text-xs uppercase block mb-1">Pace Max (sec/km)</label>
-              <input
-                type="number"
-                value={editForm.pace_range_max}
-                onChange={e => setEditForm(f => ({ ...f, pace_range_max: e.target.value }))}
-                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-smoke text-xs uppercase block mb-1">HR Zone</label>
-              <select
-                value={editForm.hr_zone}
-                onChange={e => setEditForm(f => ({ ...f, hr_zone: e.target.value }))}
-                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none"
-              >
-                <option value="">--</option>
-                {['Z1', 'Z2', 'Z3', 'Z4', 'Z5'].map(z => <option key={z} value={z}>{z}</option>)}
-              </select>
-            </div>
-          </div>
+            <div className="space-y-4">
+              {/* Workout Name */}
+              <div>
+                <label className="text-sm font-bold uppercase tracking-wider mb-2 block">Workout Name</label>
+                <input
+                  value={editForm.title}
+                  onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                  className="input-field"
+                  placeholder="e.g. Easy Base Run"
+                />
+              </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="text-smoke text-xs uppercase block mb-1">Description</label>
-              <textarea
-                rows={3}
-                value={editForm.description}
-                onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
-                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none resize-none"
-              />
-            </div>
-            <div>
-              <label className="text-smoke text-xs uppercase block mb-1">Coach Notes</label>
-              <textarea
-                rows={3}
-                value={editForm.coach_notes}
-                onChange={e => setEditForm(f => ({ ...f, coach_notes: e.target.value }))}
-                className="w-full bg-carbon border border-ash px-3 py-2 text-sm focus:border-volt outline-none resize-none"
-              />
-            </div>
-          </div>
+              {/* Type */}
+              <div>
+                <label className="text-sm font-bold uppercase tracking-wider mb-2 block">Type</label>
+                <select
+                  value={editForm.workout_type}
+                  onChange={e => setEditForm(f => ({ ...f, workout_type: e.target.value }))}
+                  className="input-field"
+                >
+                  <option value="easy">Easy Run</option>
+                  <option value="long_run">Long Run</option>
+                  <option value="tempo">Tempo</option>
+                  <option value="intervals">Intervals</option>
+                  <option value="race_pace">Race Pace</option>
+                  <option value="recovery">Recovery</option>
+                  <option value="rest">Rest</option>
+                  <option value="cross_training">Cross Training</option>
+                  <option value="race">Race Day</option>
+                </select>
+              </div>
 
-          <div className="flex gap-3">
-            <button onClick={saveEdit} disabled={saving} className="btn-primary flex items-center gap-2">
-              <Save size={14} /> {saving ? 'SAVING...' : 'SAVE CHANGES'}
-            </button>
-            <button onClick={cancelEdit} className="px-4 py-2 border border-ash text-smoke hover:text-white text-sm uppercase font-bold tracking-wider transition-colors">
-              Cancel
-            </button>
+              {/* Distance + Duration side by side */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-bold uppercase tracking-wider mb-2 block">Distance (km)</label>
+                  <input
+                    type="number" step="0.1" min="0"
+                    value={editForm.distance_km}
+                    onChange={e => setEditForm(f => ({ ...f, distance_km: e.target.value }))}
+                    className="input-field"
+                    placeholder="10.0"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-bold uppercase tracking-wider mb-2 block">Duration (min)</label>
+                  <input
+                    type="number" min="0"
+                    value={editForm.duration_minutes}
+                    onChange={e => setEditForm(f => ({ ...f, duration_minutes: e.target.value }))}
+                    className="input-field"
+                    placeholder="60"
+                  />
+                </div>
+              </div>
+
+              {/* Pace Range */}
+              <div>
+                <label className="text-sm font-bold uppercase tracking-wider mb-2 block">Pace Range (min/km)</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <span className="text-smoke text-xs block mb-1">From (faster)</span>
+                    <input
+                      type="text"
+                      value={editForm.pace_from}
+                      onChange={e => setEditForm(f => ({ ...f, pace_from: e.target.value }))}
+                      className="input-field"
+                      placeholder="5:30"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-smoke text-xs block mb-1">To (slower)</span>
+                    <input
+                      type="text"
+                      value={editForm.pace_to}
+                      onChange={e => setEditForm(f => ({ ...f, pace_to: e.target.value }))}
+                      className="input-field"
+                      placeholder="6:00"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* HR Zone */}
+              <div>
+                <label className="text-sm font-bold uppercase tracking-wider mb-2 block">HR Zone</label>
+                <select
+                  value={editForm.hr_zone}
+                  onChange={e => setEditForm(f => ({ ...f, hr_zone: e.target.value }))}
+                  className="input-field"
+                >
+                  <option value="">—</option>
+                  {['Z1', 'Z2', 'Z3', 'Z4', 'Z5'].map(z => <option key={z} value={z}>{z}</option>)}
+                </select>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="text-sm font-bold uppercase tracking-wider mb-2 block">Description</label>
+                <textarea
+                  rows={3}
+                  value={editForm.description}
+                  onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                  className="input-field resize-none"
+                  placeholder="Workout details..."
+                />
+              </div>
+
+              {/* Coach Notes */}
+              <div>
+                <label className="text-sm font-bold uppercase tracking-wider mb-2 block">Coach Notes</label>
+                <textarea
+                  rows={3}
+                  value={editForm.coach_notes}
+                  onChange={e => setEditForm(f => ({ ...f, coach_notes: e.target.value }))}
+                  className="input-field resize-none"
+                  placeholder="Notes for athlete..."
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-2">
+                <button onClick={saveEdit} disabled={saving}
+                  className="px-4 py-2 bg-volt hover:bg-volt/80 text-carbon font-semibold text-sm transition-colors disabled:opacity-50 flex-1 uppercase tracking-wider flex items-center justify-center gap-2">
+                  <Save size={14} /> {saving ? 'SAVING...' : 'SAVE CHANGES'}
+                </button>
+                <button onClick={cancelEdit} className="btn-ghost">
+                  CANCEL
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
