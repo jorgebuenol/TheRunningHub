@@ -5,6 +5,7 @@ import { formatPace, formatTime } from '../lib/vdot';
 import { useAuth } from '../context/AuthContext';
 import WorkoutFeedbackModal from '../components/athletes/WorkoutFeedbackModal';
 import WorkoutDetailPanel from '../components/WorkoutDetailPanel';
+import ActivityDetailPanel from '../components/ActivityDetailPanel';
 import StrengthSessionModal from '../components/StrengthSessionModal';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Check, X, Edit3, Save,
@@ -82,6 +83,7 @@ export default function CalendarPage() {
   const [feedbackWorkout, setFeedbackWorkout] = useState(null);
   const [saving, setSaving] = useState(false);
   const [strengthSessions, setStrengthSessions] = useState([]);
+  const [selectedActivity, setSelectedActivity] = useState(null);
   const [showStrengthModal, setShowStrengthModal] = useState(false);
   const [strengthModalDate, setStrengthModalDate] = useState(null);
   const [editingStrength, setEditingStrength] = useState(null);
@@ -475,11 +477,7 @@ export default function CalendarPage() {
                       key={act.id}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (!isCoach) {
-                          setEditingStrength(act);
-                          setStrengthModalDate(key);
-                          setShowStrengthModal(true);
-                        }
+                        setSelectedActivity(act);
                       }}
                       className={`mt-2 ${ac.bg} border-l-2 ${ac.border} px-2 py-1.5 cursor-pointer hover:brightness-125 transition-all`}
                     >
@@ -564,11 +562,7 @@ export default function CalendarPage() {
                         key={act.id}
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (!isCoach) {
-                            setEditingStrength(act);
-                            setStrengthModalDate(key);
-                            setShowStrengthModal(true);
-                          }
+                          setSelectedActivity(act);
                         }}
                         className={`${ac.bg} border-l-2 ${ac.border} px-0.5 sm:px-1.5 py-0.5 sm:py-1 mt-0.5 cursor-pointer`}
                       >
@@ -596,6 +590,27 @@ export default function CalendarPage() {
           onClose={() => setSelectedWorkout(null)}
           onEdit={() => startEdit(selectedWorkout)}
           onFeedback={() => setFeedbackWorkout(selectedWorkout)}
+        />
+      )}
+
+      {/* ─── Activity Detail Panel ─── */}
+      {selectedActivity && (
+        <ActivityDetailPanel
+          activity={selectedActivity}
+          onClose={() => setSelectedActivity(null)}
+          onEdit={() => {
+            setEditingStrength(selectedActivity);
+            setStrengthModalDate(selectedActivity.session_date);
+            setShowStrengthModal(true);
+            setSelectedActivity(null);
+          }}
+          onDelete={async () => {
+            try {
+              await api.deleteStrengthSession(selectedActivity.id);
+              setSelectedActivity(null);
+              loadData();
+            } catch (err) { console.error(err); }
+          }}
         />
       )}
 

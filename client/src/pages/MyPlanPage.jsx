@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { formatPace, formatTime, normalizeDescriptionPace } from '../lib/vdot';
 import WorkoutFeedbackModal from '../components/athletes/WorkoutFeedbackModal';
 import WorkoutDetailPanel from '../components/WorkoutDetailPanel';
+import ActivityDetailPanel from '../components/ActivityDetailPanel';
 import StrengthSessionModal from '../components/StrengthSessionModal';
 import { Calendar, Check, Zap, MessageSquare, ClipboardCheck, BarChart3, User, Plus } from 'lucide-react';
 import { getOverallProgress } from '@shared/onboardingProgress';
@@ -73,6 +74,7 @@ export default function MyPlanPage() {
   const [todayCheckedIn, setTodayCheckedIn] = useState(null);
   const [workoutFeedbacks, setWorkoutFeedbacks] = useState({});
   const [strengthSessions, setStrengthSessions] = useState([]);
+  const [selectedActivity, setSelectedActivity] = useState(null);
   const [showStrengthModal, setShowStrengthModal] = useState(false);
   const [editingStrength, setEditingStrength] = useState(null);
 
@@ -324,7 +326,7 @@ export default function MyPlanPage() {
           <div
             key={act.id}
             className={`border-l-4 ${ac.border} ${ac.bg} p-4 sm:p-6 mb-4 cursor-pointer hover:brightness-125 transition-all`}
-            onClick={() => { setEditingStrength(act); setShowStrengthModal(true); }}
+            onClick={() => setSelectedActivity(act)}
           >
             <p className="text-smoke text-xs uppercase tracking-wider mb-1">TODAY — {ac.label.toUpperCase()}</p>
             <div className="flex items-center gap-3">
@@ -411,7 +413,7 @@ export default function MyPlanPage() {
                 return (
                   <div
                     key={act.id}
-                    onClick={() => { setEditingStrength(act); setShowStrengthModal(true); }}
+                    onClick={() => setSelectedActivity(act)}
                     className={`border-l-4 ${ac.border} ${ac.bg} p-2 flex items-center gap-2 cursor-pointer hover:brightness-125 transition-all`}
                   >
                     <span className={`${ac.text} text-xs font-bold uppercase`}>{ac.label}</span>
@@ -489,7 +491,7 @@ export default function MyPlanPage() {
                 return (
                   <div
                     key={act.id}
-                    onClick={(e) => { e.stopPropagation(); setEditingStrength(act); setShowStrengthModal(true); }}
+                    onClick={(e) => { e.stopPropagation(); setSelectedActivity(act); }}
                     className={`mt-2 ${ac.bg} border-l-2 ${ac.border} px-2 py-1 cursor-pointer hover:brightness-125 transition-all`}
                   >
                     <span className={`${ac.text} text-[10px] font-bold uppercase`}>{ac.abbrev}</span>
@@ -514,6 +516,26 @@ export default function MyPlanPage() {
           planStatus={plan?.status}
           onClose={() => setSelectedWorkout(null)}
           onFeedback={() => { setFeedbackWorkout(selectedWorkout); setSelectedWorkout(null); }}
+        />
+      )}
+
+      {/* Activity detail panel */}
+      {selectedActivity && (
+        <ActivityDetailPanel
+          activity={selectedActivity}
+          onClose={() => setSelectedActivity(null)}
+          onEdit={() => {
+            setEditingStrength(selectedActivity);
+            setShowStrengthModal(true);
+            setSelectedActivity(null);
+          }}
+          onDelete={async () => {
+            try {
+              await api.deleteStrengthSession(selectedActivity.id);
+              setSelectedActivity(null);
+              loadMyData();
+            } catch (err) { console.error(err); }
+          }}
         />
       )}
 
