@@ -33,10 +33,10 @@ strengthRoutes.post('/', async (req, res, next) => {
       notes: body.notes || null,
     };
 
-    // Upsert — allow updating same-day same-activity-type session
+    // Insert — allow multiple activities of the same type per day
     const { data, error } = await req.supabase
       .from('strength_sessions')
-      .upsert(sessionData, { onConflict: 'athlete_id,session_date,activity_type' })
+      .insert(sessionData)
       .select()
       .single();
 
