@@ -173,6 +173,8 @@ stravaRoutes.post('/sync/:athleteId', async (req, res) => {
     }
 
     const activities = await activitiesRes.json();
+    console.log(`Strava sync: fetched ${activities.length} activities for athlete ${athleteId}`);
+    activities.forEach(a => console.log(`  - ${a.start_date_local?.split('T')[0]} | ${a.type} | ${a.name} | ${(a.distance/1000).toFixed(1)}km`));
 
     // Get athlete's workouts in the same date range
     const startDate = new Date(sevenDaysAgo * 1000).toISOString().split('T')[0];
@@ -180,10 +182,13 @@ stravaRoutes.post('/sync/:athleteId', async (req, res) => {
 
     const { data: workouts } = await req.supabase
       .from('workouts')
-      .select('id, workout_date, workout_type, completed')
+      .select('id, workout_date, workout_type, status')
       .eq('athlete_id', athleteId)
       .gte('workout_date', startDate)
       .lte('workout_date', endDate);
+
+    console.log(`Strava sync: found ${workouts?.length || 0} workouts in date range ${startDate} to ${endDate}`);
+    workouts?.forEach(w => console.log(`  - ${w.workout_date} | ${w.workout_type} | status: ${w.status}`));
 
     let synced = 0;
     const runTypes = ['easy', 'tempo', 'long_run', 'intervals', 'race_pace', 'recovery', 'race'];
@@ -198,7 +203,7 @@ stravaRoutes.post('/sync/:athleteId', async (req, res) => {
       // Try to match to a planned workout
       const match = workouts?.find(w => {
         if (w.workout_date !== actDate) return false;
-        if (w.completed) return false;
+        if (w.status === 'completed') return false;
         if (isRun && runTypes.includes(w.workout_type)) return true;
         if (w.workout_type === stravaWorkoutType) return true;
         return false;
@@ -215,12 +220,11 @@ stravaRoutes.post('/sync/:athleteId', async (req, res) => {
         await req.supabase
           .from('workouts')
           .update({
-            completed: true,
+            status: 'completed',
             actual_distance_km: distKm,
-            actual_duration_min: durationMin,
-            actual_pace_sec_km: paceSecKm,
-            actual_hr_avg: activity.average_heartrate || null,
-            actual_hr_max: activity.max_heartrate || null,
+            actual_duration_minutes: durationMin,
+            actual_avg_pace: paceSecKm,
+            actual_avg_hr: activity.average_heartrate ? Math.round(activity.average_heartrate) : null,
           })
           .eq('id', match.id);
 

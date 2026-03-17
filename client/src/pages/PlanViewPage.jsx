@@ -6,7 +6,7 @@ import { formatPace, formatTime, normalizeDescriptionPace } from '../lib/vdot';
 import {
   ArrowLeft, Calendar, Edit3, Save, X, Check,
   Bot, Send, Loader, MessageSquare, ChevronDown, ChevronRight,
-  Shield, History, Undo2, Zap, Trash2,
+  Shield, History, Undo2, Zap, Trash2, RefreshCw,
 } from 'lucide-react';
 
 const WORKOUT_COLORS = {
@@ -107,9 +107,23 @@ export default function PlanViewPage() {
   const [confirmDelete, setConfirmDelete] = useState(null); // { type: 'plan'|'week', id?, label }
   const [deleting, setDeleting] = useState(false);
 
+  // Strava sync
+  const [stravaConnected, setStravaConnected] = useState(false);
+  const [stravaSyncing, setStravaSyncing] = useState(false);
+  const [stravaMsg, setStravaMsg] = useState('');
+
   useEffect(() => {
     loadPlan();
   }, [planId]);
+
+  // Check Strava status when plan loads
+  useEffect(() => {
+    if (plan?.athlete_id) {
+      api.stravaStatus(plan.athlete_id)
+        .then(s => setStravaConnected(s.connected))
+        .catch(() => {});
+    }
+  }, [plan?.athlete_id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -386,11 +400,42 @@ export default function PlanViewPage() {
               {plan.version > 1 && ` | v${plan.version}`}
             </p>
           </div>
-          <Link to={`/calendar/${plan.athlete_id}`} className="btn-secondary flex items-center gap-2">
-            <Calendar size={16} />
-            CALENDAR
-          </Link>
+          <div className="flex items-center gap-3">
+            {stravaConnected && (
+              <button
+                onClick={async () => {
+                  setStravaSyncing(true);
+                  setStravaMsg('');
+                  try {
+                    const result = await api.stravaSync(plan.athlete_id);
+                    setStravaMsg(`Synced ${result.synced} activities`);
+                    loadPlan();
+                    setTimeout(() => setStravaMsg(''), 4000);
+                  } catch (err) {
+                    setStravaMsg(err.message || 'Sync failed');
+                    setTimeout(() => setStravaMsg(''), 4000);
+                  } finally {
+                    setStravaSyncing(false);
+                  }
+                }}
+                disabled={stravaSyncing}
+                className="btn-secondary flex items-center gap-2 border-orange-500 text-orange-400 hover:bg-orange-500/20"
+              >
+                {stravaSyncing ? <Loader size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                SYNC STRAVA
+              </button>
+            )}
+            <Link to={`/calendar/${plan.athlete_id}`} className="btn-secondary flex items-center gap-2">
+              <Calendar size={16} />
+              CALENDAR
+            </Link>
+          </div>
         </div>
+        {stravaMsg && (
+          <div className={`text-xs px-3 py-1 mb-2 ${stravaMsg.includes('Synced') ? 'text-green-400' : 'text-red-400'}`}>
+            {stravaMsg}
+          </div>
+        )}
 
         {/* Coach action bar */}
         {isCoach && (
