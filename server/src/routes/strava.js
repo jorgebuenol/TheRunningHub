@@ -176,18 +176,41 @@ stravaRoutes.post('/sync/:athleteId', async (req, res) => {
     console.log(`Strava sync: fetched ${activities.length} activities for athlete ${athleteId}`);
     activities.forEach(a => console.log(`  - ${a.start_date_local?.split('T')[0]} | ${a.type} | ${a.name} | ${(a.distance/1000).toFixed(1)}km`));
 
-    // Get athlete's workouts in the same date range
+    // Find the active (approved) plan for this athlete
+    const { data: activePlan } = await req.supabase
+      .from('training_plans')
+      .select('id')
+      .eq('athlete_id', athleteId)
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (!activePlan) {
+      return res.status(400).json({ message: 'No active plan found' });
+    }
+
+    // Get the plan's week IDs
+    const { data: planWeeks } = await req.supabase
+      .from('plan_weeks')
+      .select('id')
+      .eq('plan_id', activePlan.id);
+
+    const weekIds = (planWeeks || []).map(w => w.id);
+
+    // Get workouts from the active plan in the date range
     const startDate = new Date(sevenDaysAgo * 1000).toISOString().split('T')[0];
     const endDate = new Date().toISOString().split('T')[0];
 
     const { data: workouts } = await req.supabase
       .from('workouts')
-      .select('id, workout_date, workout_type, status')
+      .select('id, workout_date, workout_type, status, plan_week_id')
       .eq('athlete_id', athleteId)
+      .in('plan_week_id', weekIds)
       .gte('workout_date', startDate)
       .lte('workout_date', endDate);
 
-    console.log(`Strava sync: found ${workouts?.length || 0} workouts in date range ${startDate} to ${endDate}`);
+    console.log(`Strava sync: active plan ${activePlan.id}, found ${workouts?.length || 0} workouts in range ${startDate} to ${endDate}`);
     workouts?.forEach(w => console.log(`  - ${w.workout_date} | ${w.workout_type} | status: ${w.status}`));
 
     let synced = 0;
