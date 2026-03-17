@@ -109,4 +109,10 @@ export const api = {
   // AI Chat
   sendChatMessage: (athleteId, message, history = []) =>
     request('/api/chat', { method: 'POST', body: JSON.stringify({ athleteId, message, history }), timeout: 120000 }),
+
+  // Strava
+  stravaConnect: (athleteId) => request(`/api/strava/connect/${athleteId}`),
+  stravaSync: (athleteId) => request(`/api/strava/sync/${athleteId}`, { method: 'POST' }),
+  stravaDisconnect: (athleteId) => request(`/api/strava/disconnect/${athleteId}`, { method: 'POST' }),
+  stravaStatus: (athleteId) => request(`/api/strava/status/${athleteId}`),
 };

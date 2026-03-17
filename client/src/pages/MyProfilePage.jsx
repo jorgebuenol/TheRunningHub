@@ -5,7 +5,7 @@ import { ONBOARDING_SECTIONS, getSectionStatus, getOverallProgress } from '@shar
 import {
   ChevronDown, ChevronRight, Check, Circle, CircleDot, CheckCircle,
   User, Activity, Target, Calendar, Heart, Moon, Apple, Briefcase,
-  RefreshCw, Dumbbell, Smartphone,
+  RefreshCw, Dumbbell, Smartphone, Link2, Unlink, Loader,
 } from 'lucide-react';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -924,8 +924,83 @@ function CurrentTrainingFields({ athlete, updateJsonbField }) {
 }
 
 function TechnologyFields({ athlete, updateField }) {
+  const [stravaLoading, setStravaLoading] = useState(false);
+  const [stravaMsg, setStravaMsg] = useState('');
+  const isStravaConnected = !!athlete.strava_athlete_id;
+
+  // Check URL for strava=connected on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('strava') === 'connected') {
+      setStravaMsg('Strava connected successfully!');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  async function handleStravaConnect() {
+    setStravaLoading(true);
+    setStravaMsg('');
+    try {
+      const { url } = await api.stravaConnect(athlete.id);
+      window.location.href = url;
+    } catch (err) {
+      setStravaMsg(err.message || 'Failed to connect Strava');
+      setStravaLoading(false);
+    }
+  }
+
+  async function handleStravaDisconnect() {
+    setStravaLoading(true);
+    setStravaMsg('');
+    try {
+      await api.stravaDisconnect(athlete.id);
+      setStravaMsg('Strava disconnected');
+      // Force re-fetch athlete to clear strava_athlete_id
+      window.location.reload();
+    } catch (err) {
+      setStravaMsg(err.message || 'Failed to disconnect');
+      setStravaLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
+      {/* Strava Integration */}
+      <div>
+        <FieldLabel>Strava</FieldLabel>
+        <div className="flex items-center gap-3 mt-1">
+          {isStravaConnected ? (
+            <>
+              <span className="flex items-center gap-2 text-sm text-green-400 font-semibold">
+                <Check size={16} /> Strava Connected
+              </span>
+              <button
+                onClick={handleStravaDisconnect}
+                disabled={stravaLoading}
+                className="px-3 py-1.5 border border-red-500/50 text-red-400 hover:bg-red-500/10 text-xs uppercase font-bold tracking-wider flex items-center gap-1 transition-colors"
+              >
+                {stravaLoading ? <Loader size={12} className="animate-spin" /> : <Unlink size={12} />}
+                Disconnect
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={handleStravaConnect}
+              disabled={stravaLoading}
+              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2 transition-colors"
+            >
+              {stravaLoading ? <Loader size={14} className="animate-spin" /> : <Link2 size={14} />}
+              Connect Strava
+            </button>
+          )}
+        </div>
+        {stravaMsg && (
+          <p className={`text-xs mt-2 ${stravaMsg.includes('success') || stravaMsg.includes('connected') ? 'text-green-400' : 'text-red-400'}`}>
+            {stravaMsg}
+          </p>
+        )}
+      </div>
+
       <div>
         <FieldLabel>GPS Watch Model</FieldLabel>
         <StableTextInput
