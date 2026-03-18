@@ -169,9 +169,10 @@ function AthleteCard({ athlete }) {
     ? `${athlete.weeks_to_race}W`
     : '--';
 
+  const isNew = !athlete.has_any_plan;
   const statusColor = athlete.active_plan
     ? 'text-green-400'
-    : 'text-yellow-400';
+    : isNew ? 'text-volt' : 'text-yellow-400';
 
   const m = athlete.monitoring;
   const zone = m?.acwr_zone ? (ACWR_ZONE[m.acwr_zone] || ACWR_ZONE.green) : null;
@@ -281,7 +282,7 @@ function AthleteCard({ athlete }) {
 
       <div className="flex items-center justify-between pt-3 border-t border-ash">
         <span className={`text-xs font-semibold uppercase ${statusColor}`}>
-          {athlete.active_plan ? 'PLAN ACTIVE' : 'NO PLAN'}
+          {athlete.active_plan ? 'PLAN ACTIVE' : isNew ? 'NEW — PENDING REVIEW' : 'NO PLAN'}
         </span>
         {athlete.last_activity && (
           <span className="text-smoke text-xs">

@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import AthletesPage from './pages/AthletesPage';
 import AthleteDetailPage from './pages/AthleteDetailPage';
@@ -50,6 +51,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to={profile?.role === 'coach' ? '/dashboard' : '/my-plan'} replace /> : <LoginPage />} />
+      <Route path="/register" element={user ? <Navigate to={profile?.role === 'coach' ? '/dashboard' : '/my-plan'} replace /> : <RegisterPage />} />
 
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         {/* Coach routes */}

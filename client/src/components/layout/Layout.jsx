@@ -1,12 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../lib/api';
 import { LayoutDashboard, Users, Calendar, CalendarDays, LogOut, Zap, User, MessageSquare, ClipboardCheck, UserCircle, Menu, X, TrendingUp } from 'lucide-react';
 
 export default function Layout() {
   const { profile, isCoach, signOut } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [newAthleteCount, setNewAthleteCount] = useState(0);
+
+  useEffect(() => {
+    if (isCoach) {
+      api.getNewAthleteCount().then(d => setNewAthleteCount(d.count)).catch(() => {});
+    }
+  }, [isCoach]);
 
   async function handleSignOut() {
     await signOut();
@@ -69,6 +77,11 @@ export default function Layout() {
               <NavLink to="/athletes" className={navLinkClass} onClick={handleNavClick}>
                 <Users size={18} />
                 Athletes
+                {newAthleteCount > 0 && (
+                  <span className="ml-auto bg-volt text-carbon text-xs font-bold px-1.5 py-0.5 min-w-[20px] text-center">
+                    {newAthleteCount}
+                  </span>
+                )}
               </NavLink>
               <NavLink to="/progress" className={navLinkClass} onClick={handleNavClick}>
                 <TrendingUp size={18} />

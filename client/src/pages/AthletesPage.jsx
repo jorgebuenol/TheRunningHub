@@ -79,6 +79,8 @@ export default function AthletesPage() {
             <div>
               {athlete.training_plans?.some(p => p.status === 'approved') ? (
                 <span className="badge">ACTIVE</span>
+              ) : athlete.training_plans?.length === 0 ? (
+                <span className="text-volt text-xs font-bold uppercase border border-volt/30 bg-volt/10 px-2 py-0.5">NEW</span>
               ) : (
                 <span className="text-smoke text-xs uppercase">No Plan</span>
               )}
@@ -121,6 +123,8 @@ export default function AthletesPage() {
               <div className="mt-1">
                 {athlete.training_plans?.some(p => p.status === 'approved') ? (
                   <span className="text-green-400 text-xs font-semibold uppercase">Plan Active</span>
+                ) : athlete.training_plans?.length === 0 ? (
+                  <span className="text-volt text-xs font-bold uppercase">New</span>
                 ) : (
                   <span className="text-smoke text-xs uppercase">No Plan</span>
                 )}

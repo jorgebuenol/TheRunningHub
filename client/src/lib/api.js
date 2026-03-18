@@ -115,4 +115,7 @@ export const api = {
   stravaSync: (athleteId) => request(`/api/strava/sync/${athleteId}`, { method: 'POST' }),
   stravaDisconnect: (athleteId) => request(`/api/strava/disconnect/${athleteId}`, { method: 'POST' }),
   stravaStatus: (athleteId) => request(`/api/strava/status/${athleteId}`),
+
+  // Dashboard
+  getNewAthleteCount: () => request('/api/dashboard/new-count'),
 };

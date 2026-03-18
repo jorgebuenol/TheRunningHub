@@ -18,6 +18,7 @@ import { monitoringRoutes } from './routes/monitoring.js';
 import { chatRoutes } from './routes/chat.js';
 import { strengthRoutes } from './routes/strength.js';
 import { stravaRoutes, stravaCallbackHandler } from './routes/strava.js';
+import { emailRoutes } from './routes/email.js';
 import { authMiddleware } from './middleware/auth.js';
 
 const app = express();
@@ -33,6 +34,9 @@ app.use(express.json());
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', service: 'runhub-api' });
 });
+
+// Welcome email — no user auth required (called right after signup)
+app.use('/api/email', emailRoutes);
 
 // Strava OAuth callback — no user auth required (redirect from Strava)
 app.get('/api/strava/callback', (req, _res, next) => {

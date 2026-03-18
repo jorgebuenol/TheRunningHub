@@ -63,6 +63,7 @@ dashboardRoutes.get('/', coachOnly, async (req, res, next) => {
           goal_race_date: athlete.goal_race_date,
           weeks_to_race: weeksToRace,
           active_plan: activePlan || null,
+          has_any_plan: (athlete.training_plans?.length || 0) > 0,
           last_activity: recentWorkout || null,
           workouts_this_week: workoutsThisWeek || 0,
           monitoring,
@@ -71,10 +72,27 @@ dashboardRoutes.get('/', coachOnly, async (req, res, next) => {
       })
     );
 
+    const newAthleteCount = dashboard.filter(a => !a.has_any_plan).length;
+
     res.json({
       total_athletes: dashboard.length,
+      new_athlete_count: newAthleteCount,
       athletes: dashboard,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET lightweight new-athlete count for sidebar badge
+dashboardRoutes.get('/new-count', coachOnly, async (req, res, next) => {
+  try {
+    const { data: athletes } = await req.supabase
+      .from('athletes')
+      .select('id, training_plans(id)');
+
+    const count = (athletes || []).filter(a => !a.training_plans?.length).length;
+    res.json({ count });
   } catch (err) {
     next(err);
   }

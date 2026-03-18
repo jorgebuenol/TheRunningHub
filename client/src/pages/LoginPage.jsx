@@ -1,16 +1,14 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Zap } from 'lucide-react';
 
 export default function LoginPage() {
-  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn } = useAuth();
   const navigate = useNavigate();
 
   async function handleSubmit(e) {
@@ -19,14 +17,9 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      if (isSignUp) {
-        await signUp(email, password, { full_name: fullName, role: 'athlete' });
-        setError('Check your email to confirm your account.');
-      } else {
-        const result = await signIn(email, password);
-        const dest = result.profile?.role === 'coach' ? '/dashboard' : '/my-plan';
-        navigate(dest);
-      }
+      const result = await signIn(email, password);
+      const dest = result.profile?.role === 'coach' ? '/dashboard' : '/my-plan';
+      navigate(dest);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -71,9 +64,7 @@ export default function LoginPage() {
             <p className="text-smoke uppercase tracking-widest text-xs sm:text-sm mt-1">Getting Ready for the Colombia Splits</p>
           </div>
 
-          <h2 className="font-display text-2xl sm:text-3xl mb-6 sm:mb-8">
-            {isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'}
-          </h2>
+          <h2 className="font-display text-2xl sm:text-3xl mb-6 sm:mb-8">SIGN IN</h2>
 
           {error && (
             <div className="bg-red-900/30 border border-red-500 text-red-300 px-4 py-3 mb-6 text-sm">
@@ -82,20 +73,6 @@ export default function LoginPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {isSignUp && (
-              <div>
-                <label className="label">Full Name</label>
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="input-field"
-                  placeholder="Your full name"
-                  required
-                />
-              </div>
-            )}
-
             <div>
               <label className="label">Email</label>
               <input
@@ -126,17 +103,17 @@ export default function LoginPage() {
               disabled={loading}
               className="btn-primary w-full disabled:opacity-50"
             >
-              {loading ? 'LOADING...' : isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'}
+              {loading ? 'LOADING...' : 'SIGN IN'}
             </button>
           </form>
 
           <div className="mt-8 text-center">
-            <button
-              onClick={() => { setIsSignUp(!isSignUp); setError(''); }}
+            <Link
+              to="/register"
               className="text-smoke hover:text-volt text-sm uppercase tracking-wider transition-colors"
             >
-              {isSignUp ? 'Already have an account? Sign in' : 'Need an account? Sign up'}
-            </button>
+              New athlete? Register here
+            </Link>
           </div>
         </div>
       </div>
