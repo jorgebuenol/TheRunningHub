@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
 import { api } from '../lib/api';
 import { formatPace, formatTime, normalizeDescriptionPace } from '../lib/vdot';
 import WorkoutFeedbackModal from '../components/athletes/WorkoutFeedbackModal';
@@ -88,12 +87,8 @@ export default function MyPlanPage() {
     if (!user) return;
 
     try {
-      // Get my athlete profile
-      const { data: athleteData } = await supabase
-        .from('athletes')
-        .select('*, profiles(full_name, email)')
-        .eq('profile_id', user.id)
-        .single();
+      // Get my athlete profile via server API (service role, no RLS issues)
+      const athleteData = await api.getMyProfile();
 
       if (!athleteData) {
         setLoading(false);
@@ -111,39 +106,36 @@ export default function MyPlanPage() {
       }
 
       // Get active plan
-      const { data: plans } = await supabase
-        .from('training_plans')
-        .select('*')
-        .eq('athlete_id', athleteData.id)
-        .eq('status', 'approved')
-        .limit(1);
+      const activePlan = athleteData.training_plans?.find(p => p.status === 'approved')
+        || athleteData.training_plans?.[0];
 
-      if (plans?.[0]) {
-        const fullPlan = await api.getPlan(plans[0].id);
+      if (activePlan) {
+        const fullPlan = await api.getPlan(activePlan.id);
         setPlan(fullPlan);
 
-        // Find this week's workouts
+        // Find this week's workouts from the full plan data
         const today = new Date();
         const monday = getMonday(today);
         const sunday = new Date(monday);
         sunday.setDate(sunday.getDate() + 6);
-
         const mondayStr = toLocalDateStr(monday);
         const sundayStr = toLocalDateStr(sunday);
 
-        const { data: weekWorkouts } = await supabase
-          .from('workouts')
-          .select('*')
-          .eq('athlete_id', athleteData.id)
-          .gte('workout_date', mondayStr)
-          .lte('workout_date', sundayStr)
-          .order('workout_date');
-
-        setThisWeekWorkouts(weekWorkouts || []);
+        // Extract this week's workouts from the plan
+        const weekWorkouts = [];
+        for (const week of fullPlan.plan_weeks || []) {
+          for (const w of week.workouts || []) {
+            if (w.workout_date >= mondayStr && w.workout_date <= sundayStr) {
+              weekWorkouts.push(w);
+            }
+          }
+        }
+        weekWorkouts.sort((a, b) => a.workout_date.localeCompare(b.workout_date));
+        setThisWeekWorkouts(weekWorkouts);
 
         // Load feedback for this week's workouts
         const fbMap = {};
-        for (const w of (weekWorkouts || [])) {
+        for (const w of weekWorkouts) {
           try {
             const fb = await api.getWorkoutFeedback(w.id);
             if (fb) fbMap[w.id] = fb;
