@@ -258,6 +258,16 @@ export default function MyPlanPage() {
         );
       })()}
 
+      {/* No Plan Banner */}
+      {!plan && (
+        <div className="flex items-center gap-3 px-5 py-4 mb-6 border border-smoke/30 bg-steel/20">
+          <Calendar size={20} className="text-smoke flex-shrink-0" />
+          <p className="text-smoke text-sm">
+            Your coach is preparing your plan. You can log your activities in the meantime.
+          </p>
+        </div>
+      )}
+
       {/* Daily Check-in Banner */}
       {!todayCheckedIn && (
         <Link

@@ -287,28 +287,29 @@ export default function CalendarPage() {
   const backUrl = paramAthleteId ? `/athletes/${paramAthleteId}` : '/my-plan';
   const backLabel = paramAthleteId ? athlete?.profiles?.full_name || 'Back' : 'My Plan';
 
-  if (!plan) {
-    return (
-      <div>
-        <Link to={backUrl} className="flex items-center gap-2 text-smoke hover:text-volt text-sm uppercase tracking-wider mb-6">
-          <ArrowLeft size={16} /> {backLabel}
-        </Link>
-        <div className="card text-center py-12">
-          <p className="text-smoke text-lg uppercase">No training plan found</p>
-          {paramAthleteId && (
-            <Link to={`/athletes/${paramAthleteId}`} className="btn-primary mt-4 inline-block">GENERATE A PLAN</Link>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div>
       {/* Back link */}
       <Link to={backUrl} className="flex items-center gap-2 text-smoke hover:text-volt text-sm uppercase tracking-wider mb-6 transition-colors">
         <ArrowLeft size={16} /> {backLabel}
       </Link>
+
+      {/* No plan banner */}
+      {!plan && (
+        <div className="flex items-center gap-3 px-5 py-4 mb-6 border border-smoke/30 bg-steel/20">
+          <CalendarIcon size={20} className="text-smoke flex-shrink-0" />
+          <div>
+            <p className="text-smoke text-sm">
+              Your coach is preparing your plan. You can log your activities in the meantime.
+            </p>
+            {paramAthleteId && (
+              <Link to={`/athletes/${paramAthleteId}`} className="text-volt text-xs uppercase font-bold hover:underline mt-1 inline-block">
+                Generate a Plan
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ─── Navigation bar ─── */}
       <div className="flex flex-col gap-3 sm:gap-4 mb-6">
