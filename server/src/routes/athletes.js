@@ -9,32 +9,37 @@ export const athleteRoutes = Router();
 // GET own athlete profile (athlete self-service) — must be before /:id
 athleteRoutes.get('/me', async (req, res, next) => {
   try {
-    const { data, error } = await req.supabase
+    // Fetch all athlete records for this user (may have duplicates)
+    const { data: athletes, error } = await req.supabase
       .from('athletes')
       .select('*, training_plans(id, name, status, race_date, goal_race)')
       .eq('profile_id', req.user.id)
-      .single();
+      .order('created_at', { ascending: true });
 
-    if (error || !data) {
-      // Auto-create athlete record for self-signed-up users
-      console.log('Auto-create athlete for user:', req.user.id, 'profile exists:', !!req.profile);
+    if (error) throw error;
 
-      const { data: newAthlete, error: insertErr } = await req.supabase
-        .from('athletes')
-        .insert({ profile_id: req.user.id })
-        .select()
-        .single();
-
-      if (insertErr) {
-        console.error('Auto-create athlete insert failed:', insertErr);
-        return res.status(500).json({ message: 'Could not create athlete profile.', detail: insertErr.message });
-      }
-
-      console.log('Auto-created athlete:', newAthlete.id);
-      return res.json(newAthlete);
+    if (athletes?.length > 0) {
+      // Prefer the athlete record that has training plans
+      const withPlan = athletes.find(a => a.training_plans?.length > 0);
+      return res.json(withPlan || athletes[0]);
     }
 
-    res.json(data);
+    // No athlete record found — auto-create for self-signed-up users
+    console.log('Auto-create athlete for user:', req.user.id, 'profile exists:', !!req.profile);
+
+    const { data: newAthlete, error: insertErr } = await req.supabase
+      .from('athletes')
+      .insert({ profile_id: req.user.id })
+      .select()
+      .single();
+
+    if (insertErr) {
+      console.error('Auto-create athlete insert failed:', insertErr);
+      return res.status(500).json({ message: 'Could not create athlete profile.', detail: insertErr.message });
+    }
+
+    console.log('Auto-created athlete:', newAthlete.id);
+    return res.json(newAthlete);
   } catch (err) {
     next(err);
   }
