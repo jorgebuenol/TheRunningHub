@@ -320,6 +320,15 @@ export default function MyPlanPage() {
               <BarChart3 size={16} />
               {workoutFeedbacks[todayWorkout.id] ? 'EDIT FEEDBACK' : 'LOG FEEDBACK'}
             </button>
+            {todayWorkout.status !== 'completed' && (
+              <button
+                onClick={() => setRescheduleWorkout(todayWorkout)}
+                className="btn-ghost flex items-center justify-center gap-2"
+              >
+                <CalendarClock size={16} />
+                RESCHEDULE
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -434,10 +443,10 @@ export default function MyPlanPage() {
                   )}
                 </div>
               {workout && (
-                <div className="flex gap-2 flex-shrink-0">
+                <div className="flex gap-1 flex-shrink-0">
                   {workout.status !== 'completed' && workout.workout_type !== 'rest' && (
-                    <button onClick={(e) => { e.stopPropagation(); setRescheduleWorkout(workout); }} className="text-smoke hover:text-volt min-h-[44px] min-w-[44px] flex items-center justify-center" title="Reschedule">
-                      <CalendarClock size={16} />
+                    <button onClick={(e) => { e.stopPropagation(); setRescheduleWorkout(workout); }} className="text-smoke hover:text-cyan-400 min-h-[44px] px-2 flex items-center justify-center gap-1 text-[10px] uppercase font-bold tracking-wider" title="Reschedule">
+                      <CalendarClock size={14} /> Move
                     </button>
                   )}
                   {workout.status !== 'completed' && (
