@@ -7,9 +7,10 @@ import WorkoutFeedbackModal from '../components/athletes/WorkoutFeedbackModal';
 import WorkoutDetailPanel from '../components/WorkoutDetailPanel';
 import ActivityDetailPanel from '../components/ActivityDetailPanel';
 import StrengthSessionModal from '../components/StrengthSessionModal';
+import RescheduleModal from '../components/RescheduleModal';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Check, X, Edit3, Save,
-  Calendar as CalendarIcon, LayoutGrid, Flag, MessageSquare, Plus, RefreshCw, Loader,
+  Calendar as CalendarIcon, LayoutGrid, Flag, MessageSquare, Plus, RefreshCw, Loader, CalendarClock,
 } from 'lucide-react';
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval,
@@ -87,6 +88,7 @@ export default function CalendarPage() {
   const [showStrengthModal, setShowStrengthModal] = useState(false);
   const [strengthModalDate, setStrengthModalDate] = useState(null);
   const [editingStrength, setEditingStrength] = useState(null);
+  const [rescheduleWorkout, setRescheduleWorkout] = useState(null);
   const [stravaSyncing, setStravaSyncing] = useState(false);
   const [stravaMsg, setStravaMsg] = useState('');
 
@@ -120,14 +122,15 @@ export default function CalendarPage() {
     }
   }
 
-  /* ─── Build workout lookup by date ─── */
+  /* ─── Build workout lookup by date (array per date to support stacked workouts) ─── */
   const workoutsByDate = useMemo(() => {
     const map = {};
     if (!plan?.plan_weeks) return map;
     for (const week of plan.plan_weeks) {
       for (const w of week.workouts || []) {
         if (w.workout_date) {
-          map[w.workout_date] = { ...w, phase: week.phase, week_number: week.week_number };
+          if (!map[w.workout_date]) map[w.workout_date] = [];
+          map[w.workout_date].push({ ...w, phase: week.phase, week_number: week.week_number });
         }
       }
     }
@@ -193,13 +196,15 @@ export default function CalendarPage() {
     if (view === 'week') {
       for (const d of dates) {
         const key = format(d, 'yyyy-MM-dd');
-        const w = workoutsByDate[key];
-        if (!w || w.workout_type === 'rest') continue;
-        plannedKm += w.distance_km || 0;
-        plannedMin += w.duration_minutes || 0;
-        if (w.status === 'completed') {
-          completedKm += w.actual_distance_km || w.distance_km || 0;
-          completedMin += w.actual_duration_minutes || w.duration_minutes || 0;
+        const dayWorkouts = workoutsByDate[key] || [];
+        for (const w of dayWorkouts) {
+          if (w.workout_type === 'rest') continue;
+          plannedKm += w.distance_km || 0;
+          plannedMin += w.duration_minutes || 0;
+          if (w.status === 'completed') {
+            completedKm += w.actual_distance_km || w.distance_km || 0;
+            completedMin += w.actual_duration_minutes || w.duration_minutes || 0;
+          }
         }
       }
     }
@@ -467,16 +472,19 @@ export default function CalendarPage() {
         <div className="grid grid-cols-1 sm:grid-cols-7 gap-3 mb-6">
           {weekDates.map((date, i) => {
             const key = format(date, 'yyyy-MM-dd');
-            const workout = workoutsByDate[key];
-            const colors = workout ? getColors(workout.workout_type) : getColors('rest');
+            const dayWorkouts = workoutsByDate[key] || [];
+            const primaryWorkout = dayWorkouts[0];
+            const colors = primaryWorkout ? getColors(primaryWorkout.workout_type) : getColors('rest');
             const today = isToday(date);
             const isRace = raceDate && isSameDay(date, raceDate);
+
+            // All workouts for this week (for reschedule modal)
+            const allWeekWorkouts = weekDates.flatMap(d => workoutsByDate[format(d, 'yyyy-MM-dd')] || []);
 
             return (
               <div
                 key={key}
-                onClick={() => workout && setSelectedWorkout(workout)}
-                className={`border-l-4 ${colors.border} ${colors.bg} p-3 sm:p-4 min-h-[80px] sm:min-h-[180px] cursor-pointer hover:bg-white/5 transition-colors
+                className={`border-l-4 ${colors.border} ${colors.bg} p-3 sm:p-4 min-h-[80px] sm:min-h-[180px] transition-colors
                   ${today ? 'ring-2 ring-volt ring-inset' : ''}
                   ${isRace ? 'ring-2 ring-volt' : ''}
                 `}
@@ -488,38 +496,59 @@ export default function CalendarPage() {
                   </span>
                 </div>
 
-                {workout ? (
-                  <>
-                    <p className={`text-xs font-bold uppercase ${colors.text}`}>
-                      {getColors(workout.workout_type).label}
-                    </p>
-                    <p className="text-white text-sm font-semibold mt-1 line-clamp-2">{safeStr(workout.title)}</p>
-
-                    {workout.distance_km > 0 && (
-                      <p className="text-volt text-lg font-display mt-2">{workout.distance_km}KM</p>
-                    )}
-                    {workout.pace_range_min && workout.pace_range_max && (
-                      <p className="text-smoke text-xs mt-1">
-                        {formatPace(workout.pace_range_min)}-{formatPace(workout.pace_range_max)}/km
+                {dayWorkouts.length > 0 ? dayWorkouts.map((workout) => {
+                  const wColors = getColors(workout.workout_type);
+                  return (
+                    <div
+                      key={workout.id}
+                      onClick={() => setSelectedWorkout(workout)}
+                      className={`cursor-pointer hover:bg-white/5 ${dayWorkouts.length > 1 ? `mb-2 border-l-2 ${wColors.border} ${wColors.bg} px-2 py-1.5` : ''}`}
+                    >
+                      <p className={`text-xs font-bold uppercase ${wColors.text}`}>
+                        {getColors(workout.workout_type).label}
                       </p>
-                    )}
-                    {workout.duration_minutes > 0 && (
-                      <p className="text-smoke text-xs mt-1">{formatTime(Math.round(workout.duration_minutes * 60))}</p>
-                    )}
-                    {workout.status === 'completed' && (
-                      <div className="flex items-center gap-1 mt-2">
-                        <Check size={12} className="text-green-400" />
-                        <span className="text-green-400 text-xs font-semibold">DONE</span>
-                      </div>
-                    )}
-                    {workout.status === 'skipped' && (
-                      <div className="flex items-center gap-1 mt-2">
-                        <X size={12} className="text-red-400" />
-                        <span className="text-red-400 text-xs font-semibold">SKIPPED</span>
-                      </div>
-                    )}
-                  </>
-                ) : (
+                      <p className="text-white text-sm font-semibold mt-1 line-clamp-2">{safeStr(workout.title)}</p>
+
+                      {workout.distance_km > 0 && (
+                        <p className="text-volt text-lg font-display mt-2">{workout.distance_km}KM</p>
+                      )}
+                      {workout.pace_range_min && workout.pace_range_max && (
+                        <p className="text-smoke text-xs mt-1">
+                          {formatPace(workout.pace_range_min)}-{formatPace(workout.pace_range_max)}/km
+                        </p>
+                      )}
+                      {workout.duration_minutes > 0 && (
+                        <p className="text-smoke text-xs mt-1">{formatTime(Math.round(workout.duration_minutes * 60))}</p>
+                      )}
+                      {workout.status === 'completed' && (
+                        <div className="flex items-center gap-1 mt-2">
+                          <Check size={12} className="text-green-400" />
+                          <span className="text-green-400 text-xs font-semibold">DONE</span>
+                        </div>
+                      )}
+                      {workout.status === 'skipped' && (
+                        <div className="flex items-center gap-1 mt-2">
+                          <X size={12} className="text-red-400" />
+                          <span className="text-red-400 text-xs font-semibold">SKIPPED</span>
+                        </div>
+                      )}
+                      {workout.rescheduled_from_date && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <CalendarClock size={10} className="text-cyan-400" />
+                          <span className="text-cyan-400 text-[10px] font-semibold">RESCHEDULED</span>
+                        </div>
+                      )}
+                      {!isCoach && workout.status !== 'completed' && workout.workout_type !== 'rest' && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setRescheduleWorkout({ ...workout, _allWeekWorkouts: allWeekWorkouts }); }}
+                          className="text-smoke hover:text-volt mt-1" title="Reschedule"
+                        >
+                          <CalendarClock size={12} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                }) : (
                   <p className="text-smoke/50 text-xs uppercase mt-4">Rest</p>
                 )}
 
@@ -572,20 +601,20 @@ export default function CalendarPage() {
           <div className="grid grid-cols-7 gap-px sm:gap-1 mb-6 min-w-[320px]">
             {monthDays.map((date) => {
               const key = format(date, 'yyyy-MM-dd');
-              const workout = workoutsByDate[key];
+              const dayWorkouts = workoutsByDate[key] || [];
+              const primaryWorkout = dayWorkouts[0];
               const inMonth = isSameMonth(date, currentDate);
               const today = isToday(date);
-              const colors = workout ? getColors(workout.workout_type) : null;
               const isRace = raceDate && isSameDay(date, raceDate);
 
               return (
                 <div
                   key={key}
-                  onClick={() => workout && setSelectedWorkout(workout)}
+                  onClick={() => primaryWorkout && setSelectedWorkout(primaryWorkout)}
                   className={`p-1 sm:p-2 min-h-[52px] sm:min-h-[90px] border border-ash/30 transition-colors
                     ${inMonth ? 'bg-steel/20' : 'bg-carbon/50 opacity-40'}
                     ${today ? 'ring-1 ring-volt ring-inset' : ''}
-                    ${workout ? 'cursor-pointer hover:bg-white/5' : ''}
+                    ${primaryWorkout ? 'cursor-pointer hover:bg-white/5' : ''}
                   `}
                 >
                   <div className="flex items-center justify-between mb-0.5 sm:mb-1">
@@ -595,19 +624,31 @@ export default function CalendarPage() {
                     {isRace && <Flag size={8} className="text-volt sm:w-[10px] sm:h-[10px]" />}
                   </div>
 
-                  {workout && workout.workout_type !== 'rest' && (
-                    <div className={`${colors.bg} border-l-2 ${colors.border} px-0.5 sm:px-1.5 py-0.5 sm:py-1`}>
-                      <p className={`text-[8px] sm:text-[10px] font-bold uppercase ${colors.text} truncate`}>
-                        {colors.label}
-                      </p>
-                      {workout.distance_km > 0 && (
-                        <p className="text-white text-[8px] sm:text-[10px] font-semibold hidden sm:block">{workout.distance_km}km</p>
-                      )}
-                      {workout.status === 'completed' && (
-                        <Check size={8} className="text-green-400 mt-0.5 hidden sm:block" />
-                      )}
-                    </div>
-                  )}
+                  {dayWorkouts.filter(w => w.workout_type !== 'rest').map((workout) => {
+                    const colors = getColors(workout.workout_type);
+                    return (
+                      <div
+                        key={workout.id}
+                        onClick={(e) => { e.stopPropagation(); setSelectedWorkout(workout); }}
+                        className={`${colors.bg} border-l-2 ${colors.border} px-0.5 sm:px-1.5 py-0.5 sm:py-1 mb-0.5 cursor-pointer`}
+                      >
+                        <div className="flex items-center gap-0.5">
+                          <p className={`text-[8px] sm:text-[10px] font-bold uppercase ${colors.text} truncate`}>
+                            {colors.label}
+                          </p>
+                          {workout.rescheduled_from_date && (
+                            <CalendarClock size={7} className="text-cyan-400 flex-shrink-0" />
+                          )}
+                        </div>
+                        {workout.distance_km > 0 && (
+                          <p className="text-white text-[8px] sm:text-[10px] font-semibold hidden sm:block">{workout.distance_km}km</p>
+                        )}
+                        {workout.status === 'completed' && (
+                          <Check size={8} className="text-green-400 mt-0.5 hidden sm:block" />
+                        )}
+                      </div>
+                    );
+                  })}
 
                   {activitiesByDate[key]?.map((act) => {
                     const ac = getActivityColors(act.activity_type);
@@ -834,6 +875,19 @@ export default function CalendarPage() {
           onClose={() => setFeedbackWorkout(null)}
           onSaved={() => {
             setFeedbackWorkout(null);
+            loadData();
+          }}
+        />
+      )}
+
+      {/* ─── Reschedule Modal ─── */}
+      {rescheduleWorkout && (
+        <RescheduleModal
+          workout={rescheduleWorkout}
+          weekWorkouts={rescheduleWorkout._allWeekWorkouts || weekDates.flatMap(d => workoutsByDate[format(d, 'yyyy-MM-dd')] || [])}
+          onClose={() => setRescheduleWorkout(null)}
+          onSaved={() => {
+            setRescheduleWorkout(null);
             loadData();
           }}
         />

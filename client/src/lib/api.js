@@ -65,6 +65,7 @@ export const api = {
   deleteWeek: (planId, weekId) => request(`/api/plans/${planId}/weeks/${weekId}`, { method: 'DELETE' }),
   getAthletePlans: (athleteId) => request(`/api/plans/athlete/${athleteId}`),
   updateWorkout: (workoutId, data) => request(`/api/workouts/${workoutId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  rescheduleWorkout: (workoutId, newDate) => request(`/api/workouts/${workoutId}/reschedule`, { method: 'POST', body: JSON.stringify({ new_date: newDate }) }),
   getWorkoutsInRange: (athleteId, start, end) => request(`/api/workouts/range/${athleteId}?start=${start}&end=${end}`),
 
   // Plan Review Workflow

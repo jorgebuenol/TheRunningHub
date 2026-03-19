@@ -7,7 +7,8 @@ import WorkoutFeedbackModal from '../components/athletes/WorkoutFeedbackModal';
 import WorkoutDetailPanel from '../components/WorkoutDetailPanel';
 import ActivityDetailPanel from '../components/ActivityDetailPanel';
 import StrengthSessionModal from '../components/StrengthSessionModal';
-import { Calendar, Check, Zap, MessageSquare, ClipboardCheck, BarChart3, User, Plus, RefreshCw, Loader } from 'lucide-react';
+import RescheduleModal from '../components/RescheduleModal';
+import { Calendar, Check, Zap, MessageSquare, ClipboardCheck, BarChart3, User, Plus, RefreshCw, Loader, CalendarClock } from 'lucide-react';
 import { getOverallProgress } from '@shared/onboardingProgress';
 
 const WORKOUT_COLORS = {
@@ -76,6 +77,7 @@ export default function MyPlanPage() {
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [showStrengthModal, setShowStrengthModal] = useState(false);
   const [editingStrength, setEditingStrength] = useState(null);
+  const [rescheduleWorkout, setRescheduleWorkout] = useState(null);
   const [stravaSyncing, setStravaSyncing] = useState(false);
   const [stravaMsg, setStravaMsg] = useState('');
 
@@ -420,6 +422,11 @@ export default function MyPlanPage() {
                         {hasFeedback && (
                           <span className="text-volt text-[10px]">RPE {hasFeedback.rpe}</span>
                         )}
+                        {workout.rescheduled_from_date && (
+                          <span className="text-cyan-400 text-[10px] font-semibold flex items-center gap-0.5">
+                            <CalendarClock size={8} /> MOVED
+                          </span>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -428,6 +435,11 @@ export default function MyPlanPage() {
                 </div>
               {workout && (
                 <div className="flex gap-2 flex-shrink-0">
+                  {workout.status !== 'completed' && workout.workout_type !== 'rest' && (
+                    <button onClick={(e) => { e.stopPropagation(); setRescheduleWorkout(workout); }} className="text-smoke hover:text-volt min-h-[44px] min-w-[44px] flex items-center justify-center" title="Reschedule">
+                      <CalendarClock size={16} />
+                    </button>
+                  )}
                   {workout.status !== 'completed' && (
                     <button onClick={(e) => { e.stopPropagation(); markCompleted(workout.id); }} className="text-smoke hover:text-green-400 min-h-[44px] min-w-[44px] flex items-center justify-center">
                       <Check size={16} />
@@ -501,7 +513,18 @@ export default function MyPlanPage() {
                       <span className="text-volt text-[10px]">RPE {hasFeedback.rpe}</span>
                     </div>
                   )}
+                  {workout.rescheduled_from_date && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <CalendarClock size={10} className="text-cyan-400" />
+                      <span className="text-cyan-400 text-[10px]">MOVED</span>
+                    </div>
+                  )}
                   <div className="flex gap-1 mt-2">
+                    {workout.status !== 'completed' && workout.workout_type !== 'rest' && (
+                      <button onClick={(e) => { e.stopPropagation(); setRescheduleWorkout(workout); }} className="text-smoke hover:text-volt" title="Reschedule">
+                        <CalendarClock size={12} />
+                      </button>
+                    )}
                     {workout.status !== 'completed' && (
                       <button onClick={(e) => { e.stopPropagation(); markCompleted(workout.id); }} className="text-smoke hover:text-green-400">
                         <Check size={12} />
@@ -599,6 +622,19 @@ export default function MyPlanPage() {
           workout={feedbackWorkout}
           onClose={() => setFeedbackWorkout(null)}
           onSaved={loadMyData}
+        />
+      )}
+
+      {/* Reschedule Modal */}
+      {rescheduleWorkout && (
+        <RescheduleModal
+          workout={rescheduleWorkout}
+          weekWorkouts={thisWeekWorkouts}
+          onClose={() => setRescheduleWorkout(null)}
+          onSaved={() => {
+            setRescheduleWorkout(null);
+            loadMyData();
+          }}
         />
       )}
 
