@@ -541,9 +541,9 @@ export default function CalendarPage() {
                       {!isCoach && workout.status !== 'completed' && workout.workout_type !== 'rest' && (
                         <button
                           onClick={(e) => { e.stopPropagation(); setRescheduleWorkout({ ...workout, _allWeekWorkouts: allWeekWorkouts }); }}
-                          className="text-smoke hover:text-volt mt-1" title="Reschedule"
+                          className="flex items-center gap-1 mt-2 text-cyan-400 hover:text-cyan-300 text-[10px] uppercase font-bold tracking-wider transition-colors"
                         >
-                          <CalendarClock size={12} />
+                          <CalendarClock size={10} /> Reschedule
                         </button>
                       )}
                     </div>

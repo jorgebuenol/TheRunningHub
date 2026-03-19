@@ -528,12 +528,15 @@ export default function MyPlanPage() {
                       <span className="text-cyan-400 text-[10px]">MOVED</span>
                     </div>
                   )}
-                  <div className="flex gap-1 mt-2">
-                    {workout.status !== 'completed' && workout.workout_type !== 'rest' && (
-                      <button onClick={(e) => { e.stopPropagation(); setRescheduleWorkout(workout); }} className="text-smoke hover:text-volt" title="Reschedule">
-                        <CalendarClock size={12} />
-                      </button>
-                    )}
+                  {workout.status !== 'completed' && workout.workout_type !== 'rest' && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setRescheduleWorkout(workout); }}
+                      className="flex items-center gap-1 mt-2 text-cyan-400 hover:text-cyan-300 text-[10px] uppercase font-bold tracking-wider transition-colors"
+                    >
+                      <CalendarClock size={10} /> Reschedule
+                    </button>
+                  )}
+                  <div className="flex gap-1 mt-1">
                     {workout.status !== 'completed' && (
                       <button onClick={(e) => { e.stopPropagation(); markCompleted(workout.id); }} className="text-smoke hover:text-green-400">
                         <Check size={12} />
