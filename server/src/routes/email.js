@@ -42,6 +42,70 @@ emailRoutes.post('/welcome', async (req, res) => {
   }
 });
 
+export async function sendPlanPublishedEmail({ email, athleteName, planName }) {
+  const resend = getResend();
+  if (!resend) {
+    console.log('RESEND_API_KEY not set, skipping plan published email');
+    return;
+  }
+  try {
+    await resend.emails.send({
+      from: `The Run Hub <${FROM_EMAIL}>`,
+      to: email,
+      subject: 'Your training plan has been updated',
+      html: buildPlanPublishedHtml(athleteName, planName),
+    });
+    console.log(`Plan published email sent to ${email}`);
+  } catch (err) {
+    console.error('Failed to send plan published email:', err.message);
+  }
+}
+
+function buildPlanPublishedHtml(name, planName) {
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#000000;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#000000;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;">
+        <!-- Logo -->
+        <tr><td style="padding:0 0 32px 0;">
+          <span style="font-size:28px;font-weight:900;color:#CCFF00;letter-spacing:4px;text-transform:uppercase;">
+            &#9889; THE RUN HUB
+          </span>
+        </td></tr>
+
+        <!-- Main card -->
+        <tr><td style="background-color:#111111;border:1px solid #222222;padding:40px;">
+          <h1 style="margin:0 0 16px 0;font-size:24px;font-weight:700;color:#FFFFFF;">
+            Your plan is ready, ${name}!
+          </h1>
+          <p style="margin:0 0 24px 0;font-size:16px;line-height:1.6;color:#999999;">
+            Your coach has published${planName ? ` <strong style="color:#FFFFFF;">${planName}</strong>` : ' a new training plan'} for you. Log in to view your workouts and get started.
+          </p>
+
+          <!-- CTA Button -->
+          <a href="${APP_URL}/my-plan"
+             style="display:inline-block;background-color:#CCFF00;color:#000000;font-size:14px;font-weight:700;text-decoration:none;padding:14px 32px;letter-spacing:2px;text-transform:uppercase;">
+            VIEW YOUR PLAN
+          </a>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:32px 0 0 0;">
+          <p style="margin:0;font-size:12px;color:#555555;letter-spacing:1px;text-transform:uppercase;">
+            The Run Hub &mdash; Personalized Training Plans
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 function buildWelcomeHtml(name) {
   return `
 <!DOCTYPE html>

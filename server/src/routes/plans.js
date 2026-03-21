@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { coachOnly } from '../middleware/auth.js';
+import { sendPlanPublishedEmail } from './email.js';
 import { generateTrainingPlan, generateMacroPlan, generateCouchToRunMacro, generateWeeklyDetail, checkRedFlags, deriveAthleteLevel, intensityFromPhase } from '../services/planGenerator.js';
 import { getAthleteMonitoringSummary } from '../services/monitoring.js';
 import { addDays, startOfWeek } from '../utils/dates.js';
-import { isOnboardingComplete, getMissingSections } from '../utils/onboardingProgress.js';
 
 export const planRoutes = Router();
 
@@ -107,15 +107,6 @@ planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
 
     if (!athlete.goal_race || !athlete.goal_race_date) {
       return res.status(400).json({ message: 'Athlete must have a goal race and date set' });
-    }
-
-    // Check onboarding completion
-    if (!isOnboardingComplete(athlete)) {
-      const missing = getMissingSections(athlete);
-      return res.status(400).json({
-        message: 'Athlete profile must be 100% complete before generating a plan',
-        missing_sections: missing,
-      });
     }
 
     // If Magic Mile was provided, estimate VDOT from it
@@ -422,6 +413,18 @@ planRoutes.post('/:planId/approve', coachOnly, async (req, res, next) => {
     if (updateErr) throw updateErr;
 
     const fullPlan = await fetchFullPlan(req.supabase, planId);
+
+    // Send email notification to athlete (non-blocking)
+    const athleteEmail = fullPlan?.athletes?.profiles?.email;
+    const athleteName = fullPlan?.athletes?.profiles?.full_name;
+    if (athleteEmail) {
+      sendPlanPublishedEmail({
+        email: athleteEmail,
+        athleteName,
+        planName: fullPlan?.name,
+      });
+    }
+
     res.json(fullPlan);
   } catch (err) {
     next(err);
