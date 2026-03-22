@@ -119,4 +119,8 @@ export const api = {
 
   // Dashboard
   getNewAthleteCount: () => request('/api/dashboard/new-count'),
+
+  // Weekly Summary
+  getWeeklySummary: () => request('/api/weekly-summary'),
+  sendWeeklySummaryEmail: () => request('/api/weekly-summary/send-email', { method: 'POST' }),
 };

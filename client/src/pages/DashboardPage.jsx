@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import Sparkline from '../components/ui/Sparkline';
-import { Users, Target, Calendar, TrendingUp, ChevronRight, Plus, Zap, AlertTriangle, Shield, Activity, UserX, Heart } from 'lucide-react';
+import WeeklySummaryModal from '../components/WeeklySummaryModal';
+import { Users, Target, Calendar, TrendingUp, ChevronRight, Plus, Zap, AlertTriangle, Shield, Activity, UserX, Heart, BarChart2 } from 'lucide-react';
 
 const ACWR_ZONE = {
   green:  { bg: 'bg-green-500/20',  border: 'border-green-500',  text: 'text-green-400',  label: 'OPTIMAL' },
@@ -14,6 +15,7 @@ export default function DashboardPage() {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showWeeklySummary, setShowWeeklySummary] = useState(false);
 
   useEffect(() => {
     loadDashboard();
@@ -61,12 +63,26 @@ export default function DashboardPage() {
           <h1 className="font-display text-3xl sm:text-4xl text-volt">DASHBOARD</h1>
           <p className="text-smoke uppercase tracking-wider text-xs sm:text-sm mt-1">Coach Overview</p>
         </div>
-        <Link to="/athletes/new" className="btn-primary flex items-center gap-2 flex-shrink-0 text-xs sm:text-sm">
-          <Plus size={16} />
-          <span className="hidden sm:inline">ADD ATHLETE</span>
-          <span className="sm:hidden">ADD</span>
-        </Link>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => setShowWeeklySummary(true)}
+            className="btn-secondary flex items-center gap-2 text-xs sm:text-sm"
+          >
+            <BarChart2 size={16} />
+            <span className="hidden sm:inline">WEEKLY SUMMARY</span>
+            <span className="sm:hidden">SUMMARY</span>
+          </button>
+          <Link to="/athletes/new" className="btn-primary flex items-center gap-2 text-xs sm:text-sm">
+            <Plus size={16} />
+            <span className="hidden sm:inline">ADD ATHLETE</span>
+            <span className="sm:hidden">ADD</span>
+          </Link>
+        </div>
       </div>
+
+      {showWeeklySummary && (
+        <WeeklySummaryModal onClose={() => setShowWeeklySummary(false)} />
+      )}
 
       {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

@@ -19,7 +19,11 @@ import { chatRoutes } from './routes/chat.js';
 import { strengthRoutes } from './routes/strength.js';
 import { stravaRoutes, stravaCallbackHandler } from './routes/strava.js';
 import { emailRoutes } from './routes/email.js';
+import { weeklySummaryRoutes } from './routes/weeklySummary.js';
 import { authMiddleware } from './middleware/auth.js';
+import { getAllAthletesSummary } from './services/weeklySummary.js';
+import { sendWeeklySummaryEmail } from './routes/email.js';
+import cron from 'node-cron';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -56,6 +60,7 @@ app.use('/api/feedback', authMiddleware, feedbackRoutes);
 app.use('/api/monitoring', authMiddleware, monitoringRoutes);
 app.use('/api/chat', authMiddleware, chatRoutes);
 app.use('/api/strength', authMiddleware, strengthRoutes);
+app.use('/api/weekly-summary', authMiddleware, weeklySummaryRoutes);
 
 // Error handler
 app.use((err, _req, res, _next) => {
@@ -68,3 +73,19 @@ app.use((err, _req, res, _next) => {
 app.listen(PORT, () => {
   console.log(`[RUNHUB API] Running on port ${PORT}`);
 });
+
+// Automated weekly summary: every Sunday at 21:00 UTC (4:00 PM Bogotá, UTC-5)
+cron.schedule('0 21 * * 0', async () => {
+  console.log('[CRON] Sending weekly summary email...');
+  try {
+    const supabase = (await import('@supabase/supabase-js')).createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_KEY
+    );
+    const summaries = await getAllAthletesSummary(supabase);
+    await sendWeeklySummaryEmail(summaries);
+    console.log(`[CRON] Weekly summary sent for ${summaries.length} athletes`);
+  } catch (err) {
+    console.error('[CRON] Weekly summary failed:', err.message);
+  }
+}, { timezone: 'UTC' });
