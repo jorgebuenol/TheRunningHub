@@ -56,8 +56,10 @@ export async function getAthleteWeeklySummary(supabase, { id: athleteId, name, e
   ]);
 
   const workouts = thisWeekResult.data || [];
-  const planned = workouts.filter(w => w.workout_type !== 'rest');
-  const completed = workouts.filter(w => w.status === 'completed');
+  // Only running/cardio types count for adherence — exclude rest and cross_training (strength days)
+  const RUN_TYPES = new Set(['easy', 'tempo', 'long_run', 'intervals', 'race_pace', 'recovery', 'race']);
+  const planned = workouts.filter(w => RUN_TYPES.has(w.workout_type));
+  const completed = workouts.filter(w => w.status === 'completed' && RUN_TYPES.has(w.workout_type));
 
   const completedRuns = completed.map(w => {
     const fb = w.workout_feedback?.[0] || null;
