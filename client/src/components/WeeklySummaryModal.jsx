@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { X, Mail, Copy, Check, ChevronLeft, ChevronRight, Shield, AlertTriangle, Zap } from 'lucide-react';
+import { X, Mail, Copy, Check, ChevronLeft, ChevronRight, AlertTriangle, Zap } from 'lucide-react';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -269,11 +269,11 @@ export default function WeeklySummaryModal({ onClose }) {
   const [error, setError] = useState('');
 
   // Load on mount
-  useState(() => {
+  useEffect(() => {
     api.getWeeklySummary()
       .then(d => { setData(d); setLoading(false); })
       .catch(err => { setError(err.message); setLoading(false); });
-  });
+  }, []);
 
   async function handleSendEmail() {
     setSendingEmail(true);
