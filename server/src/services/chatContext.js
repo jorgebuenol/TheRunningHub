@@ -97,6 +97,20 @@ export async function buildAthleteContext(supabase, athleteId) {
   parts.push(`- Race: ${formatPace(athlete.pace_race)}`);
   parts.push(`- Interval: ${formatPace(athlete.pace_vo2max)}`);
 
+  // HR Zones (if set)
+  if (athlete.hr_max) {
+    const z1 = athlete.hr_z1_max || Math.round(athlete.hr_max * 0.50);
+    const z2 = athlete.hr_z2_max || Math.round(athlete.hr_max * 0.75);
+    const z3 = athlete.hr_z3_max || Math.round(athlete.hr_max * 0.85);
+    const z4 = athlete.hr_z4_max || Math.round(athlete.hr_max * 0.92);
+    parts.push(`\n## HR ZONES (Max HR: ${athlete.hr_max} bpm, Resting: ${athlete.hr_resting || '?'} bpm)`);
+    parts.push(`- Z1 Recovery: <${z1} bpm`);
+    parts.push(`- Z2 Easy: ${z1}-${z2} bpm`);
+    parts.push(`- Z3 Tempo: ${z2}-${z3} bpm`);
+    parts.push(`- Z4 Threshold: ${z3}-${z4} bpm`);
+    parts.push(`- Z5 VO2max: >${z4} bpm`);
+  }
+
   // ACWR
   parts.push(`\n## WORKLOAD STATUS`);
   parts.push(`- ACWR: ${acwr.ratio} (${acwr.zone.toUpperCase()}) — Acute: ${acwr.acute_km}km, Chronic avg: ${acwr.chronic_km}km/week`);
@@ -135,7 +149,12 @@ export async function buildAthleteContext(supabase, athleteId) {
   }
 
   parts.push(`\n## INSTRUCTIONS`);
-  parts.push(`Respond as a knowledgeable, supportive running coach. Consider the athlete's current readiness, workload, and recent performance when giving advice. Be specific and data-driven. Answer in the language the coach writes to you in (likely Spanish or English).`);
+  parts.push(`Respond as a knowledgeable, supportive running coach. Consider the athlete's current readiness, workload, and recent performance when giving advice. Be specific and data-driven. Answer in the language the coach writes to you in (likely Spanish or English).
+
+When the coach requests HR-based training changes (e.g. "change easy runs to HR-based", "set to heart rate zone 2", "make this week HR-based"):
+- Reference the athlete's HR zones from the profile above
+- Recommend specific bpm ranges based on the athlete's zones
+- If HR zones are not set, remind the coach to set them in the athlete profile first`);
 
   return parts.join('\n');
 }
@@ -230,6 +249,20 @@ export async function buildPlanReviewContext(supabase, athleteId, planId) {
   parts.push(`- Race: ${formatPace(athlete.pace_race)}`);
   parts.push(`- Interval: ${formatPace(athlete.pace_vo2max)}`);
 
+  // HR Zones (if set)
+  if (athlete.hr_max) {
+    const z1 = athlete.hr_z1_max || Math.round(athlete.hr_max * 0.50);
+    const z2 = athlete.hr_z2_max || Math.round(athlete.hr_max * 0.75);
+    const z3 = athlete.hr_z3_max || Math.round(athlete.hr_max * 0.85);
+    const z4 = athlete.hr_z4_max || Math.round(athlete.hr_max * 0.92);
+    parts.push(`\n## HR ZONES (Max HR: ${athlete.hr_max} bpm, Resting: ${athlete.hr_resting || '?'} bpm)`);
+    parts.push(`- Z1 Recovery: <${z1} bpm`);
+    parts.push(`- Z2 Easy: ${z1}-${z2} bpm`);
+    parts.push(`- Z3 Tempo: ${z2}-${z3} bpm`);
+    parts.push(`- Z4 Threshold: ${z3}-${z4} bpm`);
+    parts.push(`- Z5 VO2max: >${z4} bpm`);
+  }
+
   // Full plan
   parts.push(`\n## TRAINING PLAN: ${plan.name}`);
   parts.push(`Status: ${plan.status} | ${plan.total_weeks} weeks | Version ${plan.version || 1}`);
@@ -302,7 +335,13 @@ For GENERATED week adjustments (changing individual workouts):
   ]
 }
 \`\`\`
-Valid workout fields: distance_km, duration_minutes, pace_target_sec_km, pace_range_min, pace_range_max, hr_zone, title, description, workout_type, coach_notes, intervals_detail.
+Valid workout fields: distance_km, duration_minutes, pace_target_sec_km, pace_range_min, pace_range_max, hr_zone, title, description, workout_type, coach_notes, intervals_detail, target_type, hr_target_min, hr_target_max.
+
+For HR-based requests (e.g. "change easy runs to HR-based Z2", "make this week HR-based"):
+- Set target_type to "hr"
+- Set hr_target_min and hr_target_max using the athlete's HR zone thresholds (see HR ZONES above)
+- Update description to lead with HR target instruction: "Keep HR between [min]-[max] bpm. Slow down or walk if HR exceeds [max]. Ignore pace."
+- Set hr_zone to the appropriate zone (Z1/Z2/Z3/Z4/Z5)
 
 IMPORTANT:
 - Use the exact week_id or workout_id values from the plan data above.

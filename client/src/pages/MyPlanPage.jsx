@@ -299,9 +299,11 @@ export default function MyPlanPage() {
           <div className="flex flex-wrap gap-3 sm:gap-6 mt-3">
             {todayWorkout.distance_km && <span className="text-lg font-bold">{todayWorkout.distance_km}km</span>}
             {todayWorkout.duration_minutes && <span className="text-smoke">{formatTime(Math.round(todayWorkout.duration_minutes * 60))}</span>}
-            {todayWorkout.pace_range_min && todayWorkout.pace_range_max && (
+            {todayWorkout.target_type === 'hr' && todayWorkout.hr_target_min && todayWorkout.hr_target_max ? (
+              <span className="text-red-400 font-semibold">HR {todayWorkout.hr_target_min}-{todayWorkout.hr_target_max} bpm</span>
+            ) : todayWorkout.pace_range_min && todayWorkout.pace_range_max ? (
               <span className="text-smoke">{formatPace(todayWorkout.pace_range_min)}-{formatPace(todayWorkout.pace_range_max)} /km</span>
-            )}
+            ) : null}
           </div>
           {todayWorkout.description && <p className="text-sm mt-3">{normalizeDescriptionPace(safeStr(todayWorkout.description), todayWorkout)}</p>}
           {todayWorkout.coach_notes && <p className="text-volt text-sm mt-2">Coach: {safeStr(todayWorkout.coach_notes)}</p>}

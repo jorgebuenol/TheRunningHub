@@ -148,6 +148,7 @@ export default function AthleteDetailPage() {
       magicMileSec: '',
       isRunWalk: false,
       isCouchToRun: false,
+      trainingMethod: 'pace',
       canRun10Min: '',
       longestRunMinutes: '',
       runningFrequency: '',
@@ -165,6 +166,9 @@ export default function AthleteDetailPage() {
       if (genOverrides.vdotOverride) overrides.vdotOverride = parseInt(genOverrides.vdotOverride);
       if (genOverrides.isRunWalk) overrides.isRunWalk = true;
       if (genOverrides.isCouchToRun) overrides.isCouchToRun = true;
+      if (genOverrides.trainingMethod && genOverrides.trainingMethod !== 'pace') {
+        overrides.trainingMethod = genOverrides.trainingMethod;
+      }
 
       // Calculate Magic Mile seconds if provided
       const mm = parseInt(genOverrides.magicMileMin) || 0;
@@ -471,6 +475,38 @@ export default function AthleteDetailPage() {
             <FieldValue label="Intervals.icu API Key" value={athlete.intervals_icu_api_key ? '••••••••' : null} />
           </div>
         </ProfileSection>
+
+        {/* HR Zones (not part of onboarding) */}
+        {athlete.hr_max && (
+          <ProfileSection icon={Heart} title="HEART RATE ZONES" status="complete">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+              <FieldValue label="Max HR" value={`${athlete.hr_max} bpm`} />
+              <FieldValue label="Resting HR" value={athlete.hr_resting ? `${athlete.hr_resting} bpm` : null} />
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mt-3">
+              <div className="text-center p-2 border border-blue-500/30 bg-blue-500/5">
+                <p className="text-blue-400 text-xs font-bold">Z1</p>
+                <p className="text-white text-sm">&lt;{athlete.hr_z1_max || Math.round(athlete.hr_max * 0.50)}</p>
+              </div>
+              <div className="text-center p-2 border border-green-500/30 bg-green-500/5">
+                <p className="text-green-400 text-xs font-bold">Z2</p>
+                <p className="text-white text-sm">{athlete.hr_z1_max || Math.round(athlete.hr_max * 0.50)}-{athlete.hr_z2_max || Math.round(athlete.hr_max * 0.75)}</p>
+              </div>
+              <div className="text-center p-2 border border-yellow-500/30 bg-yellow-500/5">
+                <p className="text-yellow-400 text-xs font-bold">Z3</p>
+                <p className="text-white text-sm">{athlete.hr_z2_max || Math.round(athlete.hr_max * 0.75)}-{athlete.hr_z3_max || Math.round(athlete.hr_max * 0.85)}</p>
+              </div>
+              <div className="text-center p-2 border border-orange-500/30 bg-orange-500/5">
+                <p className="text-orange-400 text-xs font-bold">Z4</p>
+                <p className="text-white text-sm">{athlete.hr_z3_max || Math.round(athlete.hr_max * 0.85)}-{athlete.hr_z4_max || Math.round(athlete.hr_max * 0.92)}</p>
+              </div>
+              <div className="text-center p-2 border border-red-500/30 bg-red-500/5">
+                <p className="text-red-400 text-xs font-bold">Z5</p>
+                <p className="text-white text-sm">&gt;{athlete.hr_z4_max || Math.round(athlete.hr_max * 0.92)}</p>
+              </div>
+            </div>
+          </ProfileSection>
+        )}
       </div>
 
       {/* Training Paces */}
@@ -840,6 +876,38 @@ function PreGenerationModal({ athlete, genOverrides, setGenOverrides, onConfirm,
               <p>Wk 7-8: 20-25 min continuous + Magic Mile test</p>
               <p className="text-smoke/60 pt-1">Wk 9+: Standard beginner plan (VDOT 25)</p>
             </div>
+          )}
+        </div>
+
+        <div className="border-t border-ash my-4" />
+
+        {/* Training Method */}
+        <div className="mb-4">
+          <h4 className="font-display text-sm text-smoke mb-3">TRAINING METHOD</h4>
+          <div className="flex gap-2">
+            {[
+              { value: 'pace', label: 'PACE-BASED', desc: 'Target pace per km' },
+              { value: 'hr', label: 'HR-BASED', desc: 'Target heart rate zones' },
+              { value: 'rpe', label: 'RPE-BASED', desc: 'Rate of perceived exertion' },
+            ].map(m => (
+              <button
+                key={m.value}
+                onClick={() => setGenOverrides(o => ({ ...o, trainingMethod: m.value }))}
+                className={`flex-1 px-3 py-2 border text-xs font-bold uppercase tracking-wider transition-colors ${
+                  genOverrides.trainingMethod === m.value
+                    ? 'border-volt text-volt bg-volt/10'
+                    : 'border-ash text-smoke hover:border-volt/50'
+                }`}
+              >
+                <p>{m.label}</p>
+                <p className="text-[10px] font-normal normal-case mt-0.5">{m.desc}</p>
+              </button>
+            ))}
+          </div>
+          {genOverrides.trainingMethod === 'hr' && !athlete.hr_max && (
+            <p className="text-yellow-400 text-xs mt-2">
+              HR zones not set for this athlete. Set them in the athlete profile first, or zones will be auto-calculated from age.
+            </p>
           )}
         </div>
 

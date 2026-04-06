@@ -80,12 +80,28 @@ export default function WorkoutDetailPanel({ workout, athlete, isCoach, planStat
               {workout.duration_minutes > 0 && (
                 <span className="text-smoke text-sm">~{workout.duration_minutes} min</span>
               )}
-              {workout.pace_range_min && workout.pace_range_max && (
+              {workout.target_type === 'hr' && workout.hr_target_min && workout.hr_target_max ? (
+                <span className="text-red-400 text-sm font-bold">
+                  HR {workout.hr_target_min}-{workout.hr_target_max} bpm
+                </span>
+              ) : workout.pace_range_min && workout.pace_range_max ? (
                 <span className="text-smoke text-sm">
                   {formatPace(workout.pace_range_min)}-{formatPace(workout.pace_range_max)}/km
                 </span>
-              )}
+              ) : null}
             </div>
+
+            {/* HR-based workout banner */}
+            {workout.target_type === 'hr' && workout.hr_target_min && workout.hr_target_max && (
+              <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30">
+                <p className="text-red-400 text-xs font-bold uppercase mb-1">HR-Based Workout</p>
+                <p className="text-sm text-white">Keep HR between {workout.hr_target_min}-{workout.hr_target_max} bpm</p>
+                <p className="text-smoke text-xs mt-1">If HR exceeds {workout.hr_target_max}, slow down or walk until it drops back. Ignore pace.</p>
+                {workout.pace_range_min && workout.pace_range_max && (
+                  <p className="text-smoke text-xs mt-1">Pace reference: {formatPace(workout.pace_range_min)}-{formatPace(workout.pace_range_max)}/km</p>
+                )}
+              </div>
+            )}
           </div>
           <button onClick={onClose} className="text-smoke hover:text-white flex-shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center">
             <X size={22} />
@@ -270,6 +286,12 @@ function SessionStep({ label, data, isInterval, stepColor = 'text-white' }) {
 
 /* ─── Pace & HR Reference Card ─── */
 function PaceReferenceCard({ athlete, workout }) {
+  const hasHrZones = !!athlete.hr_max;
+  const z1 = athlete.hr_z1_max || (athlete.hr_max ? Math.round(athlete.hr_max * 0.50) : null);
+  const z2 = athlete.hr_z2_max || (athlete.hr_max ? Math.round(athlete.hr_max * 0.75) : null);
+  const z3 = athlete.hr_z3_max || (athlete.hr_max ? Math.round(athlete.hr_max * 0.85) : null);
+  const z4 = athlete.hr_z4_max || (athlete.hr_max ? Math.round(athlete.hr_max * 0.92) : null);
+
   return (
     <div className="mt-4 bg-carbon border border-ash p-3">
       <p className="text-smoke text-xs uppercase tracking-wider mb-2">
@@ -282,6 +304,21 @@ function PaceReferenceCard({ athlete, workout }) {
         <PaceRow label="Race" value={formatPace(athlete.pace_race)} />
         <PaceRow label="Interval" value={formatPace(athlete.pace_vo2max)} />
       </div>
+
+      {hasHrZones && (
+        <div className="mt-3 pt-3 border-t border-ash">
+          <p className="text-smoke text-xs uppercase tracking-wider mb-1">
+            HR Zones <span className="text-red-400 font-bold ml-1">Max {athlete.hr_max} bpm</span>
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1 text-xs">
+            <PaceRow label="Z1 Recovery" value={`<${z1}`} />
+            <PaceRow label="Z2 Easy" value={`${z1}-${z2}`} />
+            <PaceRow label="Z3 Tempo" value={`${z2}-${z3}`} />
+            <PaceRow label="Z4 Threshold" value={`${z3}-${z4}`} />
+            <PaceRow label="Z5 VO2max" value={`>${z4}`} />
+          </div>
+        </div>
+      )}
 
       {(workout.hr_zone || workout.rpe_target) && (
         <div className="flex gap-6 mt-3 pt-3 border-t border-ash">

@@ -210,6 +210,7 @@ athleteRoutes.patch('/:id', async (req, res, next) => {
       'available_days', 'available_time_start', 'available_time_end',
       'injuries', 'gps_watch_model',
       'intervals_icu_api_key', 'intervals_icu_athlete_id',
+      'hr_max', 'hr_resting', 'hr_z1_max', 'hr_z2_max', 'hr_z3_max', 'hr_z4_max',
     ];
     const allowedJsonbFields = [
       'sleep_data', 'nutrition_data', 'work_life_data',

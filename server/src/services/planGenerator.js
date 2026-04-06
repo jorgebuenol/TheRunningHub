@@ -394,6 +394,9 @@ export async function generateWeeklyDetail(athlete, profile, weekContext, monito
   const trainingDays = athlete.available_days?.length || 4;
   const unavailableDays = getUnavailableDays(athlete.available_days);
 
+  // Training method (pace / hr / rpe)
+  const trainingMethod = weekContext.trainingMethod || 'pace';
+
   // Build pace strings
   const paces = {
     easy: `${formatPaceMinKm(athlete.pace_easy_min)} - ${formatPaceMinKm(athlete.pace_easy_max)}`,
@@ -403,6 +406,25 @@ export async function generateWeeklyDetail(athlete, profile, weekContext, monito
     racePace: formatPaceMinKm(athlete.pace_race),
     recovery: formatPaceMinKm((athlete.pace_easy_max || 0) + 30),
   };
+
+  // Build HR zone strings if athlete has HR zones set
+  const hrZonesBlock = athlete.hr_max ? `
+=== ATHLETE HR ZONES ===
+Max HR: ${athlete.hr_max} bpm | Resting HR: ${athlete.hr_resting || '?'} bpm
+Z1 Recovery: <${athlete.hr_z1_max || Math.round(athlete.hr_max * 0.50)} bpm
+Z2 Easy: ${athlete.hr_z1_max || Math.round(athlete.hr_max * 0.50)}-${athlete.hr_z2_max || Math.round(athlete.hr_max * 0.75)} bpm
+Z3 Tempo: ${athlete.hr_z2_max || Math.round(athlete.hr_max * 0.75)}-${athlete.hr_z3_max || Math.round(athlete.hr_max * 0.85)} bpm
+Z4 Threshold: ${athlete.hr_z3_max || Math.round(athlete.hr_max * 0.85)}-${athlete.hr_z4_max || Math.round(athlete.hr_max * 0.92)} bpm
+Z5 VO2max: >${athlete.hr_z4_max || Math.round(athlete.hr_max * 0.92)} bpm` : '';
+
+  const hrTrainingNote = trainingMethod === 'hr' ? `
+=== TRAINING METHOD: HEART RATE BASED ===
+For all easy, recovery, and long_run workouts:
+- The PRIMARY target is HR zone, NOT pace
+- Set hr_zone to "Z2" for easy/long runs, "Z1" for recovery
+- In the description, lead with: "Keep HR between [Z2 min]-[Z2 max] bpm. If HR exceeds [max], slow down or walk until it drops back. Ignore pace."
+- Show pace as secondary reference only
+- Coach notes should reinforce: "HR is the boss today, not pace"` : '';
 
   // Build previous week data block
   const prevWeek = previousWeeksSummary?.length > 0
@@ -431,6 +453,9 @@ Current VDOT: ${vdot} (calculated from recent race or time trial)
 Training days available: ${trainingDays} days/week (preferred days: ${athlete.available_days?.join(', ') || 'any'})
 Goal: ${athlete.goal_race} -- ${goalTimeStr} half marathon
 Injuries/limitations: ${athlete.injuries || 'None'}
+
+${hrZonesBlock}
+${hrTrainingNote}
 
 === ATHLETE TRAINING PACES (Bogota altitude-adjusted, already +15 sec/km on threshold+) ===
 Easy (E) pace: ${paces.easy} min/km  [HR: 65-79% max, fully conversational]

@@ -178,6 +178,20 @@ export async function getAthleteMonitoringSummary(supabase, athleteId) {
   const planHasFullWeek = oldestPlannedDate && (now - oldestPlannedDate) / 86400000 >= 7;
   if (planHasFullWeek && complianceRate !== null && complianceRate < 60) flags.push({ type: 'compliance', message: `Low compliance: ${complianceRate}%` });
 
+  // HR zone exceedance: flag workouts where actual HR significantly exceeded target
+  const hrExceeded = feedback.filter(f => {
+    if (!f.avg_hr) return false;
+    const w = f.workouts;
+    if (!w) return false;
+    // Check if workout has hr_target_max (new field) or map hr_zone to approximate max
+    const targetMax = w.hr_target_max;
+    if (targetMax && f.avg_hr > targetMax + 10) return true; // >10 bpm over target
+    return false;
+  });
+  if (hrExceeded.length >= 2) {
+    flags.push({ type: 'hr_exceeded', message: `HR exceeded target zone in ${hrExceeded.length} recent workouts` });
+  }
+
   return {
     acwr,
     readiness: {

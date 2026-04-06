@@ -512,11 +512,15 @@ export default function CalendarPage() {
                       {workout.distance_km > 0 && (
                         <p className="text-volt text-lg font-display mt-2">{workout.distance_km}KM</p>
                       )}
-                      {workout.pace_range_min && workout.pace_range_max && (
+                      {workout.target_type === 'hr' && workout.hr_target_min && workout.hr_target_max ? (
+                        <p className="text-red-400 text-xs mt-1 font-semibold">
+                          HR {workout.hr_target_min}-{workout.hr_target_max} bpm
+                        </p>
+                      ) : workout.pace_range_min && workout.pace_range_max ? (
                         <p className="text-smoke text-xs mt-1">
                           {formatPace(workout.pace_range_min)}-{formatPace(workout.pace_range_max)}/km
                         </p>
-                      )}
+                      ) : null}
                       {workout.duration_minutes > 0 && (
                         <p className="text-smoke text-xs mt-1">{formatTime(Math.round(workout.duration_minutes * 60))}</p>
                       )}
