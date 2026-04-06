@@ -67,6 +67,38 @@ strengthRoutes.get('/athlete/:athleteId', async (req, res, next) => {
   }
 });
 
+// PATCH — update an existing strength session
+strengthRoutes.patch('/:id', async (req, res, next) => {
+  try {
+    const body = req.body;
+    const updateData = {
+      activity_type: body.activity_type,
+      session_date: body.session_date,
+      duration_minutes: body.duration_minutes,
+      intensity: body.intensity,
+      distance_km: body.distance_km ?? null,
+      avg_pace_sec: body.avg_pace_sec ?? null,
+      avg_hr: body.avg_hr ?? null,
+      max_hr: body.max_hr ?? null,
+      elevation_m: body.elevation_m ?? null,
+      notes: body.notes ?? null,
+    };
+
+    const { data, error } = await req.supabase
+      .from('strength_sessions')
+      .update(updateData)
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!data) return res.status(404).json({ message: 'Session not found' });
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // DELETE — remove a strength session
 strengthRoutes.delete('/:id', async (req, res, next) => {
   try {

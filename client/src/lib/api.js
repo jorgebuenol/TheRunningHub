@@ -100,6 +100,7 @@ export const api = {
 
   // Strength Sessions
   createStrengthSession: (data) => request('/api/strength', { method: 'POST', body: JSON.stringify(data) }),
+  updateStrengthSession: (id, data) => request(`/api/strength/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   getStrengthSessions: (athleteId, start, end) => {
     let url = `/api/strength/athlete/${athleteId}`;
     if (start && end) url += `?start=${start}&end=${end}`;
