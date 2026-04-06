@@ -65,7 +65,7 @@ export default function StrengthSessionModal({ initialDate, existingSession, onC
     if (!form.duration_minutes) return;
     setSaving(true);
     try {
-      await api.createStrengthSession({
+      const payload = {
         activity_type: form.activity_type,
         session_date: form.session_date,
         duration_minutes: parseInt(form.duration_minutes),
@@ -76,7 +76,12 @@ export default function StrengthSessionModal({ initialDate, existingSession, onC
         max_hr: showHR && form.max_hr ? parseInt(form.max_hr) : null,
         elevation_m: showElevation && form.elevation_m ? parseInt(form.elevation_m) : null,
         notes: form.notes || null,
-      });
+      };
+      if (existingSession?.id) {
+        await api.updateStrengthSession(existingSession.id, payload);
+      } else {
+        await api.createStrengthSession(payload);
+      }
       onSaved?.();
       onClose();
     } catch (err) {
@@ -182,7 +187,7 @@ export default function StrengthSessionModal({ initialDate, existingSession, onC
               <input
                 type="number"
                 min="0"
-                step="0.1"
+                step="any"
                 value={form.distance_km}
                 onChange={e => setForm(f => ({ ...f, distance_km: e.target.value }))}
                 className="input-field"

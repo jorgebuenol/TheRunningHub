@@ -67,6 +67,37 @@ strengthRoutes.get('/athlete/:athleteId', async (req, res, next) => {
   }
 });
 
+// PATCH — update a strength session
+strengthRoutes.patch('/:id', async (req, res, next) => {
+  try {
+    const body = req.body;
+    const updates = {
+      session_date: body.session_date,
+      duration_minutes: body.duration_minutes,
+      intensity: body.intensity,
+      activity_type: body.activity_type,
+      distance_km: body.distance_km ?? null,
+      avg_pace_sec: body.avg_pace_sec ?? null,
+      avg_hr: body.avg_hr ?? null,
+      max_hr: body.max_hr ?? null,
+      elevation_m: body.elevation_m ?? null,
+      notes: body.notes ?? null,
+    };
+
+    const { data, error } = await req.supabase
+      .from('strength_sessions')
+      .update(updates)
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // DELETE — remove a strength session
 strengthRoutes.delete('/:id', async (req, res, next) => {
   try {

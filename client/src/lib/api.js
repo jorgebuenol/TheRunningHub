@@ -105,6 +105,7 @@ export const api = {
     if (start && end) url += `?start=${start}&end=${end}`;
     return request(url);
   },
+  updateStrengthSession: (id, data) => request(`/api/strength/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteStrengthSession: (id) => request(`/api/strength/${id}`, { method: 'DELETE' }),
 
   // AI Chat
