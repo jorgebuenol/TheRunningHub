@@ -7,7 +7,7 @@ import {
   Zap, Calendar, Target, TrendingUp, RefreshCw, Send, ArrowLeft,
   Activity, Shield, AlertTriangle, CheckCircle, Circle, CircleDot,
   User, Heart, Moon, Apple, Briefcase, Dumbbell, Smartphone, MessageSquare, BarChart3,
-  X, Trash2, Save,
+  X, Trash2,
 } from 'lucide-react';
 
 // ─── Athlete level derivation (mirrors server logic) ───────────────────────
@@ -645,7 +645,7 @@ export default function AthleteDetailPage() {
                 disabled={savingHr}
                 className="btn-primary mt-4 flex items-center gap-2"
               >
-                <Save size={14} />
+                <CheckCircle size={14} />
                 {savingHr ? 'SAVING...' : 'SAVE HR ZONES'}
               </button>
             </>
