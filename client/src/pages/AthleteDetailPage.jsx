@@ -7,7 +7,7 @@ import {
   Zap, Calendar, Target, TrendingUp, RefreshCw, Send, ArrowLeft,
   Activity, Shield, AlertTriangle, CheckCircle, Circle, CircleDot,
   User, Heart, Moon, Apple, Briefcase, Dumbbell, Smartphone, MessageSquare, BarChart3,
-  X, Trash2,
+  X, Trash2, Save,
 } from 'lucide-react';
 
 // ─── Athlete level derivation (mirrors server logic) ───────────────────────
@@ -105,6 +105,10 @@ export default function AthleteDetailPage() {
   const [confirmDeleteAthlete, setConfirmDeleteAthlete] = useState(false);
   const [deletingAthlete, setDeletingAthlete] = useState(false);
 
+  // HR Zones editing state
+  const [hrForm, setHrForm] = useState(null);
+  const [savingHr, setSavingHr] = useState(false);
+
   // Pre-generation modal state
   const [showGenModal, setShowGenModal] = useState(false);
   const [genOverrides, setGenOverrides] = useState({
@@ -132,10 +136,68 @@ export default function AthleteDetailPage() {
       ]);
       setAthlete(data);
       setMonitoring(mon);
+      initHrForm(data);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  function calcDefaultZones(hrMax) {
+    if (!hrMax) return {};
+    return {
+      hr_z1_max: Math.round(hrMax * 0.50),
+      hr_z2_max: Math.round(hrMax * 0.75),
+      hr_z3_max: Math.round(hrMax * 0.85),
+      hr_z4_max: Math.round(hrMax * 0.92),
+    };
+  }
+
+  function initHrForm(data) {
+    const defaults = calcDefaultZones(data.hr_max);
+    setHrForm({
+      hr_max: data.hr_max || '',
+      hr_resting: data.hr_resting || '',
+      hr_z1_max: data.hr_z1_max || defaults.hr_z1_max || '',
+      hr_z2_max: data.hr_z2_max || defaults.hr_z2_max || '',
+      hr_z3_max: data.hr_z3_max || defaults.hr_z3_max || '',
+      hr_z4_max: data.hr_z4_max || defaults.hr_z4_max || '',
+    });
+  }
+
+  function handleHrMaxChange(val) {
+    const hrMax = val ? Math.round(val) : '';
+    const defaults = calcDefaultZones(hrMax);
+    setHrForm(prev => ({
+      ...prev,
+      hr_max: hrMax,
+      hr_z1_max: defaults.hr_z1_max || '',
+      hr_z2_max: defaults.hr_z2_max || '',
+      hr_z3_max: defaults.hr_z3_max || '',
+      hr_z4_max: defaults.hr_z4_max || '',
+    }));
+  }
+
+  async function saveHrZones() {
+    setSavingHr(true);
+    try {
+      const payload = {
+        hr_max: hrForm.hr_max || null,
+        hr_resting: hrForm.hr_resting || null,
+        hr_z1_max: hrForm.hr_z1_max || null,
+        hr_z2_max: hrForm.hr_z2_max || null,
+        hr_z3_max: hrForm.hr_z3_max || null,
+        hr_z4_max: hrForm.hr_z4_max || null,
+      };
+      await api.updateAthlete(id, payload);
+      setAthlete(prev => ({ ...prev, ...payload }));
+      setMessage('Heart rate zones saved.');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setMessage(`Error saving HR zones: ${err.message}`);
+    } finally {
+      setSavingHr(false);
     }
   }
 
@@ -476,37 +538,7 @@ export default function AthleteDetailPage() {
           </div>
         </ProfileSection>
 
-        {/* HR Zones (not part of onboarding) */}
-        {athlete.hr_max && (
-          <ProfileSection icon={Heart} title="HEART RATE ZONES" status="complete">
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-              <FieldValue label="Max HR" value={`${athlete.hr_max} bpm`} />
-              <FieldValue label="Resting HR" value={athlete.hr_resting ? `${athlete.hr_resting} bpm` : null} />
-            </div>
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mt-3">
-              <div className="text-center p-2 border border-blue-500/30 bg-blue-500/5">
-                <p className="text-blue-400 text-xs font-bold">Z1</p>
-                <p className="text-white text-sm">&lt;{athlete.hr_z1_max || Math.round(athlete.hr_max * 0.50)}</p>
-              </div>
-              <div className="text-center p-2 border border-green-500/30 bg-green-500/5">
-                <p className="text-green-400 text-xs font-bold">Z2</p>
-                <p className="text-white text-sm">{athlete.hr_z1_max || Math.round(athlete.hr_max * 0.50)}-{athlete.hr_z2_max || Math.round(athlete.hr_max * 0.75)}</p>
-              </div>
-              <div className="text-center p-2 border border-yellow-500/30 bg-yellow-500/5">
-                <p className="text-yellow-400 text-xs font-bold">Z3</p>
-                <p className="text-white text-sm">{athlete.hr_z2_max || Math.round(athlete.hr_max * 0.75)}-{athlete.hr_z3_max || Math.round(athlete.hr_max * 0.85)}</p>
-              </div>
-              <div className="text-center p-2 border border-orange-500/30 bg-orange-500/5">
-                <p className="text-orange-400 text-xs font-bold">Z4</p>
-                <p className="text-white text-sm">{athlete.hr_z3_max || Math.round(athlete.hr_max * 0.85)}-{athlete.hr_z4_max || Math.round(athlete.hr_max * 0.92)}</p>
-              </div>
-              <div className="text-center p-2 border border-red-500/30 bg-red-500/5">
-                <p className="text-red-400 text-xs font-bold">Z5</p>
-                <p className="text-white text-sm">&gt;{athlete.hr_z4_max || Math.round(athlete.hr_max * 0.92)}</p>
-              </div>
-            </div>
-          </ProfileSection>
-        )}
+        {/* HR Zones moved below Training Paces */}
       </div>
 
       {/* Training Paces */}
@@ -520,6 +552,90 @@ export default function AthleteDetailPage() {
           <PaceRow label="Interval" value={formatPace(athlete.pace_vo2max)} color="text-volt" />
         </div>
       </div>
+
+      {/* Heart Rate Zones */}
+      {hrForm && (
+        <div className="card mb-8">
+          <h2 className="font-display text-xl mb-4 flex items-center gap-2">
+            <Heart size={18} className="text-red-400" />
+            HEART RATE ZONES
+          </h2>
+
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="label">Max HR (bpm)</label>
+              <input
+                type="number"
+                className="input-field"
+                placeholder={athlete.age ? `Auto: ${220 - athlete.age}` : 'e.g. 190'}
+                value={hrForm.hr_max}
+                onChange={e => handleHrMaxChange(e.target.value ? parseInt(e.target.value) : null)}
+                onBlur={() => {
+                  if (!hrForm.hr_max && athlete.age) handleHrMaxChange(220 - athlete.age);
+                }}
+              />
+              {athlete.age && !hrForm.hr_max && (
+                <p className="text-smoke text-xs mt-1">Estimated: {220 - athlete.age} bpm (220 - {athlete.age})</p>
+              )}
+            </div>
+            <div>
+              <label className="label">Resting HR (bpm)</label>
+              <input
+                type="number"
+                className="input-field"
+                placeholder="e.g. 55"
+                value={hrForm.hr_resting}
+                onChange={e => setHrForm(prev => ({ ...prev, hr_resting: e.target.value ? parseInt(e.target.value) : '' }))}
+              />
+            </div>
+          </div>
+
+          {hrForm.hr_max && (
+            <div className="space-y-3">
+              <HrZoneRow
+                zone="Z1" label="Recovery" color="text-blue-400"
+                range={`< ${hrForm.hr_z1_max} bpm`}
+                value={hrForm.hr_z1_max}
+                onChange={val => setHrForm(prev => ({ ...prev, hr_z1_max: val }))}
+              />
+              <HrZoneRow
+                zone="Z2" label="Easy" color="text-green-400"
+                range={`${hrForm.hr_z1_max} - ${hrForm.hr_z2_max} bpm`}
+                value={hrForm.hr_z2_max}
+                onChange={val => setHrForm(prev => ({ ...prev, hr_z2_max: val }))}
+              />
+              <HrZoneRow
+                zone="Z3" label="Tempo" color="text-yellow-400"
+                range={`${hrForm.hr_z2_max} - ${hrForm.hr_z3_max} bpm`}
+                value={hrForm.hr_z3_max}
+                onChange={val => setHrForm(prev => ({ ...prev, hr_z3_max: val }))}
+              />
+              <HrZoneRow
+                zone="Z4" label="Threshold" color="text-orange-400"
+                range={`${hrForm.hr_z3_max} - ${hrForm.hr_z4_max} bpm`}
+                value={hrForm.hr_z4_max}
+                onChange={val => setHrForm(prev => ({ ...prev, hr_z4_max: val }))}
+              />
+              <div className="flex items-center justify-between py-2 border-b border-ash">
+                <div className="flex items-center gap-3">
+                  <span className="text-red-400 font-bold text-xs w-8">Z5</span>
+                  <span className="text-xs text-smoke">VO2max</span>
+                </div>
+                <span className="text-white text-sm">&gt; {hrForm.hr_z4_max} bpm</span>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={saveHrZones}
+            disabled={savingHr}
+            className="btn-primary mt-4 flex items-center gap-2"
+          >
+            <Save size={14} />
+            {savingHr ? 'SAVING...' : 'SAVE HR ZONES'}
+          </button>
+        </div>
+      )}
 
       {/* Monitoring Quick View */}
       {monitoring && (
@@ -1040,6 +1156,26 @@ function PaceRow({ label, value, color }) {
     <div className="flex items-center justify-between py-2 border-b border-ash last:border-0">
       <span className="text-smoke text-sm uppercase">{label}</span>
       <span className={`font-semibold ${color}`}>{value} /km</span>
+    </div>
+  );
+}
+
+function HrZoneRow({ zone, label, color, range, value, onChange }) {
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-ash">
+      <div className="flex items-center gap-3">
+        <span className={`${color} font-bold text-xs w-8`}>{zone}</span>
+        <span className="text-xs text-smoke">{label}</span>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="text-white text-sm">{range}</span>
+        <input
+          type="number"
+          className="input-field w-20 text-center text-xs"
+          value={value}
+          onChange={e => onChange(e.target.value ? parseInt(e.target.value) : '')}
+        />
+      </div>
     </div>
   );
 }
