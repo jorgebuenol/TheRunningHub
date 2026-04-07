@@ -155,9 +155,10 @@ export default function AthleteDetailPage() {
   }
 
   function initHrForm(data) {
-    const defaults = calcDefaultZones(data.hr_max);
+    const hrMax = data.hr_max || (data.age ? 220 - data.age : '');
+    const defaults = calcDefaultZones(hrMax);
     setHrForm({
-      hr_max: data.hr_max || '',
+      hr_max: hrMax,
       hr_resting: data.hr_resting || '',
       hr_z1_max: data.hr_z1_max || defaults.hr_z1_max || '',
       hr_z2_max: data.hr_z2_max || defaults.hr_z2_max || '',
