@@ -155,7 +155,7 @@ export default function AthleteDetailPage() {
   }
 
   function initHrForm(data) {
-    const hrMax = data.hr_max || (data.age ? 220 - data.age : '');
+    const hrMax = data.hr_max || '';
     const defaults = calcDefaultZones(hrMax);
     setHrForm({
       hr_max: hrMax,
@@ -557,84 +557,99 @@ export default function AthleteDetailPage() {
       {/* Heart Rate Zones */}
       {hrForm && (
         <div className="card mb-8">
-          <h2 className="font-display text-xl mb-4 flex items-center gap-2">
-            <Heart size={18} className="text-red-400" />
-            HEART RATE ZONES
-          </h2>
+          <h2 className="font-display text-xl mb-4">HEART RATE ZONES</h2>
 
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          {!hrForm.hr_max ? (
             <div>
-              <label className="label">Max HR (bpm)</label>
-              <input
-                type="number"
-                className="input-field"
-                placeholder={athlete.age ? `Auto: ${220 - athlete.age}` : 'e.g. 190'}
-                value={hrForm.hr_max}
-                onChange={e => handleHrMaxChange(e.target.value ? parseInt(e.target.value) : null)}
-                onBlur={() => {
-                  if (!hrForm.hr_max && athlete.age) handleHrMaxChange(220 - athlete.age);
-                }}
-              />
-              {athlete.age && !hrForm.hr_max && (
-                <p className="text-smoke text-xs mt-1">Estimated: {220 - athlete.age} bpm (220 - {athlete.age})</p>
-              )}
-            </div>
-            <div>
-              <label className="label">Resting HR (bpm)</label>
-              <input
-                type="number"
-                className="input-field"
-                placeholder="e.g. 55"
-                value={hrForm.hr_resting}
-                onChange={e => setHrForm(prev => ({ ...prev, hr_resting: e.target.value ? parseInt(e.target.value) : '' }))}
-              />
-            </div>
-          </div>
-
-          {hrForm.hr_max && (
-            <div className="space-y-3">
-              <HrZoneRow
-                zone="Z1" label="Recovery" color="text-blue-400"
-                range={`< ${hrForm.hr_z1_max} bpm`}
-                value={hrForm.hr_z1_max}
-                onChange={val => setHrForm(prev => ({ ...prev, hr_z1_max: val }))}
-              />
-              <HrZoneRow
-                zone="Z2" label="Easy" color="text-green-400"
-                range={`${hrForm.hr_z1_max} - ${hrForm.hr_z2_max} bpm`}
-                value={hrForm.hr_z2_max}
-                onChange={val => setHrForm(prev => ({ ...prev, hr_z2_max: val }))}
-              />
-              <HrZoneRow
-                zone="Z3" label="Tempo" color="text-yellow-400"
-                range={`${hrForm.hr_z2_max} - ${hrForm.hr_z3_max} bpm`}
-                value={hrForm.hr_z3_max}
-                onChange={val => setHrForm(prev => ({ ...prev, hr_z3_max: val }))}
-              />
-              <HrZoneRow
-                zone="Z4" label="Threshold" color="text-orange-400"
-                range={`${hrForm.hr_z3_max} - ${hrForm.hr_z4_max} bpm`}
-                value={hrForm.hr_z4_max}
-                onChange={val => setHrForm(prev => ({ ...prev, hr_z4_max: val }))}
-              />
-              <div className="flex items-center justify-between py-2 border-b border-ash">
-                <div className="flex items-center gap-3">
-                  <span className="text-red-400 font-bold text-xs w-8">Z5</span>
-                  <span className="text-xs text-smoke">VO2max</span>
-                </div>
-                <span className="text-white text-sm">&gt; {hrForm.hr_z4_max} bpm</span>
+              <p className="text-smoke text-sm mb-4">Set Max HR to calculate zones</p>
+              <div className="max-w-xs">
+                <label className="label">Max HR (bpm)</label>
+                <input
+                  type="number"
+                  className="input-field"
+                  placeholder="e.g. 190"
+                  value={hrForm.hr_max}
+                  onChange={e => handleHrMaxChange(e.target.value ? parseInt(e.target.value) : null)}
+                />
+                {athlete.age && (
+                  <button
+                    type="button"
+                    onClick={() => handleHrMaxChange(220 - athlete.age)}
+                    className="text-volt text-xs mt-1 hover:underline cursor-pointer"
+                  >
+                    Estimated: {220 - athlete.age} bpm (click to use)
+                  </button>
+                )}
               </div>
             </div>
-          )}
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="label">Max HR (bpm)</label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    value={hrForm.hr_max}
+                    onChange={e => handleHrMaxChange(e.target.value ? parseInt(e.target.value) : null)}
+                  />
+                </div>
+                <div>
+                  <label className="label">Resting HR (bpm)</label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    placeholder="e.g. 55"
+                    value={hrForm.hr_resting}
+                    onChange={e => setHrForm(prev => ({ ...prev, hr_resting: e.target.value ? parseInt(e.target.value) : '' }))}
+                  />
+                </div>
+              </div>
 
-          <button
-            onClick={saveHrZones}
-            disabled={savingHr}
-            className="btn-primary mt-4 flex items-center gap-2"
-          >
-            <Save size={14} />
-            {savingHr ? 'SAVING...' : 'SAVE HR ZONES'}
-          </button>
+              <div className="space-y-3">
+                <HrZoneRow
+                  zone="Z1" label="Recovery" color="text-blue-400"
+                  range={`< ${hrForm.hr_z1_max} bpm`}
+                  value={hrForm.hr_z1_max}
+                  onChange={val => setHrForm(prev => ({ ...prev, hr_z1_max: val }))}
+                />
+                <HrZoneRow
+                  zone="Z2" label="Easy" color="text-green-400"
+                  range={`${hrForm.hr_z1_max} - ${hrForm.hr_z2_max} bpm`}
+                  value={hrForm.hr_z2_max}
+                  onChange={val => setHrForm(prev => ({ ...prev, hr_z2_max: val }))}
+                />
+                <HrZoneRow
+                  zone="Z3" label="Tempo" color="text-yellow-400"
+                  range={`${hrForm.hr_z2_max} - ${hrForm.hr_z3_max} bpm`}
+                  value={hrForm.hr_z3_max}
+                  onChange={val => setHrForm(prev => ({ ...prev, hr_z3_max: val }))}
+                />
+                <HrZoneRow
+                  zone="Z4" label="Threshold" color="text-orange-400"
+                  range={`${hrForm.hr_z3_max} - ${hrForm.hr_z4_max} bpm`}
+                  value={hrForm.hr_z4_max}
+                  onChange={val => setHrForm(prev => ({ ...prev, hr_z4_max: val }))}
+                />
+                <div className="flex items-center justify-between py-2 border-b border-ash last:border-0">
+                  <div className="flex items-center gap-3">
+                    <span className="text-red-400 font-bold text-xs w-8">Z5</span>
+                    <span className="text-xs text-smoke">VO2max</span>
+                  </div>
+                  <span className="text-white text-sm">&gt; {hrForm.hr_z4_max} bpm</span>
+                </div>
+              </div>
+
+              <button
+                onClick={saveHrZones}
+                disabled={savingHr}
+                className="btn-primary mt-4 flex items-center gap-2"
+              >
+                <Save size={14} />
+                {savingHr ? 'SAVING...' : 'SAVE HR ZONES'}
+              </button>
+            </>
+          )}
         </div>
       )}
 
