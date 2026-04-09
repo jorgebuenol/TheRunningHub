@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { formatPace, formatTime, normalizeDescriptionPace } from '../lib/vdot';
+import { calcDefaultZones } from '@shared/hrZones';
 import { X, Check, Edit3, MessageSquare } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -287,10 +288,11 @@ function SessionStep({ label, data, isInterval, stepColor = 'text-white' }) {
 /* ─── Pace & HR Reference Card ─── */
 function PaceReferenceCard({ athlete, workout }) {
   const hasHrZones = !!athlete.hr_max;
-  const z1 = athlete.hr_z1_max || (athlete.hr_max ? Math.round(athlete.hr_max * 0.50) : null);
-  const z2 = athlete.hr_z2_max || (athlete.hr_max ? Math.round(athlete.hr_max * 0.75) : null);
-  const z3 = athlete.hr_z3_max || (athlete.hr_max ? Math.round(athlete.hr_max * 0.85) : null);
-  const z4 = athlete.hr_z4_max || (athlete.hr_max ? Math.round(athlete.hr_max * 0.92) : null);
+  const defaults = calcDefaultZones(athlete.hr_max);
+  const z1 = athlete.hr_z1_max || defaults.hr_z1_max || null;
+  const z2 = athlete.hr_z2_max || defaults.hr_z2_max || null;
+  const z3 = athlete.hr_z3_max || defaults.hr_z3_max || null;
+  const z4 = athlete.hr_z4_max || defaults.hr_z4_max || null;
 
   return (
     <div className="mt-4 bg-carbon border border-ash p-3">

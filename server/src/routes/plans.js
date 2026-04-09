@@ -4,6 +4,7 @@ import { sendPlanPublishedEmail } from './email.js';
 import { generateTrainingPlan, generateMacroPlan, generateCouchToRunMacro, generateWeeklyDetail, checkRedFlags, deriveAthleteLevel, intensityFromPhase } from '../services/planGenerator.js';
 import { getAthleteMonitoringSummary } from '../services/monitoring.js';
 import { addDays, startOfWeek } from '../utils/dates.js';
+import { calcDefaultZones } from '../utils/hrZones.js';
 
 export const planRoutes = Router();
 
@@ -326,6 +327,9 @@ planRoutes.post('/:planId/weeks/:weekId/generate', coachOnly, async (req, res, n
           pace_range_min: w.pace_range_min,
           pace_range_max: w.pace_range_max,
           hr_zone: w.hr_zone,
+          target_type: w.target_type || null,
+          hr_target_min: w.hr_target_min || null,
+          hr_target_max: w.hr_target_max || null,
           intervals_detail: w.intervals_detail,
           coach_notes: w.coach_notes,
           session_structure: w.session_structure || null,
@@ -336,10 +340,19 @@ planRoutes.post('/:planId/weeks/:weekId/generate', coachOnly, async (req, res, n
         const hrFields = {};
         if (planTrainingMethod === 'hr' && ['easy', 'recovery', 'long_run'].includes(w.workout_type)) {
           hrFields.target_type = 'hr';
-          // Use athlete's Z2 range (resting → hr_z2_max) for easy runs
           if (athlete.hr_z1_max && athlete.hr_z2_max) {
             hrFields.hr_target_min = athlete.hr_z1_max;
             hrFields.hr_target_max = athlete.hr_z2_max;
+          } else if (athlete.hr_max) {
+            // Fallback: derive zones from hr_max using default percentages
+            const defaults = calcDefaultZones(athlete.hr_max);
+            hrFields.hr_target_min = defaults.hr_z1_max;
+            hrFields.hr_target_max = defaults.hr_z2_max;
+            console.warn(`Athlete ${athlete.id}: HR zones missing, using defaults from hr_max (${athlete.hr_max})`);
+          } else {
+            // No HR data at all — fall back to pace-based targeting
+            hrFields.target_type = 'pace';
+            console.warn(`Athlete ${athlete.id}: HR-based plan requested but no HR data available, falling back to pace`);
           }
         }
 
@@ -520,6 +533,9 @@ planRoutes.post('/:planId/unpublish', coachOnly, async (req, res, next) => {
           pace_range_min: w.pace_range_min,
           pace_range_max: w.pace_range_max,
           hr_zone: w.hr_zone,
+          target_type: w.target_type || null,
+          hr_target_min: w.hr_target_min || null,
+          hr_target_max: w.hr_target_max || null,
           intervals_detail: w.intervals_detail,
           coach_notes: w.coach_notes,
           session_structure: w.session_structure || null,

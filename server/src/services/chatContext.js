@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { calculateACWR } from './monitoring.js';
 import { formatPace } from '../utils/vdot.js';
+import { calcDefaultZones } from '../utils/hrZones.js';
 
 let _anthropic;
 function getAnthropic() {
@@ -99,10 +100,11 @@ export async function buildAthleteContext(supabase, athleteId) {
 
   // HR Zones (if set)
   if (athlete.hr_max) {
-    const z1 = athlete.hr_z1_max || Math.round(athlete.hr_max * 0.50);
-    const z2 = athlete.hr_z2_max || Math.round(athlete.hr_max * 0.75);
-    const z3 = athlete.hr_z3_max || Math.round(athlete.hr_max * 0.85);
-    const z4 = athlete.hr_z4_max || Math.round(athlete.hr_max * 0.92);
+    const defaults = calcDefaultZones(athlete.hr_max);
+    const z1 = athlete.hr_z1_max || defaults.hr_z1_max;
+    const z2 = athlete.hr_z2_max || defaults.hr_z2_max;
+    const z3 = athlete.hr_z3_max || defaults.hr_z3_max;
+    const z4 = athlete.hr_z4_max || defaults.hr_z4_max;
     parts.push(`\n## HR ZONES (Max HR: ${athlete.hr_max} bpm, Resting: ${athlete.hr_resting || '?'} bpm)`);
     parts.push(`- Z1 Recovery: <${z1} bpm`);
     parts.push(`- Z2 Easy: ${z1}-${z2} bpm`);
@@ -251,10 +253,11 @@ export async function buildPlanReviewContext(supabase, athleteId, planId) {
 
   // HR Zones (if set)
   if (athlete.hr_max) {
-    const z1 = athlete.hr_z1_max || Math.round(athlete.hr_max * 0.50);
-    const z2 = athlete.hr_z2_max || Math.round(athlete.hr_max * 0.75);
-    const z3 = athlete.hr_z3_max || Math.round(athlete.hr_max * 0.85);
-    const z4 = athlete.hr_z4_max || Math.round(athlete.hr_max * 0.92);
+    const defaults = calcDefaultZones(athlete.hr_max);
+    const z1 = athlete.hr_z1_max || defaults.hr_z1_max;
+    const z2 = athlete.hr_z2_max || defaults.hr_z2_max;
+    const z3 = athlete.hr_z3_max || defaults.hr_z3_max;
+    const z4 = athlete.hr_z4_max || defaults.hr_z4_max;
     parts.push(`\n## HR ZONES (Max HR: ${athlete.hr_max} bpm, Resting: ${athlete.hr_resting || '?'} bpm)`);
     parts.push(`- Z1 Recovery: <${z1} bpm`);
     parts.push(`- Z2 Easy: ${z1}-${z2} bpm`);

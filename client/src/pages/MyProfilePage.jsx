@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { api } from '../lib/api';
 import { getBestVDOT, getTrainingPaces, formatPace, parseTime, formatTime } from '../lib/vdot';
 import { ONBOARDING_SECTIONS, getSectionStatus, getOverallProgress } from '@shared/onboardingProgress';
+import { calcDefaultZones } from '@shared/hrZones';
 import {
   ChevronDown, ChevronRight, Check, Circle, CircleDot, CheckCircle,
   User, Activity, Target, Calendar, Heart, Moon, Apple, Briefcase,
@@ -100,17 +101,6 @@ export default function MyProfilePage() {
       }
     };
   }, []);
-
-  // HR zone auto-calculation helpers
-  function calcDefaultZones(hrMax) {
-    if (!hrMax) return {};
-    return {
-      hr_z1_max: Math.round(hrMax * 0.50),
-      hr_z2_max: Math.round(hrMax * 0.75),
-      hr_z3_max: Math.round(hrMax * 0.85),
-      hr_z4_max: Math.round(hrMax * 0.92),
-    };
-  }
 
   function handleHrMaxChange(val) {
     if (val !== undefined) {

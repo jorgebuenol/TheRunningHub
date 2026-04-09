@@ -225,6 +225,44 @@ athleteRoutes.patch('/:id', async (req, res, next) => {
       if (body[field] !== undefined) updates[field] = body[field];
     }
 
+    // Validate HR zone values
+    const hrFields = ['hr_max', 'hr_resting', 'hr_z1_max', 'hr_z2_max', 'hr_z3_max', 'hr_z4_max'];
+    for (const field of hrFields) {
+      if (updates[field] !== undefined && updates[field] !== null) {
+        const val = Number(updates[field]);
+        if (!Number.isInteger(val) || val < 30 || val > 250) {
+          return res.status(400).json({ message: `Invalid ${field}: must be an integer between 30 and 250` });
+        }
+        updates[field] = val;
+      }
+    }
+    // Validate zone ordering: Z1 < Z2 < Z3 < Z4 < hr_max (when all present in update, merge with existing)
+    if (hrFields.some(f => updates[f] !== undefined)) {
+      const { data: current } = await req.supabase
+        .from('athletes')
+        .select('hr_max, hr_z1_max, hr_z2_max, hr_z3_max, hr_z4_max')
+        .eq('id', req.params.id)
+        .single();
+
+      const merged = {
+        hr_z1_max: updates.hr_z1_max ?? current?.hr_z1_max,
+        hr_z2_max: updates.hr_z2_max ?? current?.hr_z2_max,
+        hr_z3_max: updates.hr_z3_max ?? current?.hr_z3_max,
+        hr_z4_max: updates.hr_z4_max ?? current?.hr_z4_max,
+        hr_max: updates.hr_max ?? current?.hr_max,
+      };
+
+      const zones = [merged.hr_z1_max, merged.hr_z2_max, merged.hr_z3_max, merged.hr_z4_max].filter(v => v != null);
+      for (let i = 1; i < zones.length; i++) {
+        if (zones[i] <= zones[i - 1]) {
+          return res.status(400).json({ message: 'HR zones must be in ascending order (Z1 < Z2 < Z3 < Z4)' });
+        }
+      }
+      if (merged.hr_max && zones.length > 0 && zones[zones.length - 1] >= merged.hr_max) {
+        return res.status(400).json({ message: 'HR zone thresholds must be below max HR' });
+      }
+    }
+
     // Recalculate VDOT if race times changed
     let newPaces = null;
     if (updates.time_5k || updates.time_10k || updates.time_half_marathon || updates.time_marathon) {

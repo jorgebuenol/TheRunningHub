@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { formatPace, formatTime } from '../lib/vdot';
 import { getOverallProgress, getSectionStatus, ONBOARDING_SECTIONS } from '@shared/onboardingProgress';
+import { calcDefaultZones } from '@shared/hrZones';
 import {
   Zap, Calendar, Target, TrendingUp, RefreshCw, Send, ArrowLeft,
   Activity, Shield, AlertTriangle, CheckCircle, Circle, CircleDot,
@@ -144,39 +145,29 @@ export default function AthleteDetailPage() {
     }
   }
 
-  function calcDefaultZones(hrMax) {
-    if (!hrMax) return {};
-    return {
-      hr_z1_max: Math.round(hrMax * 0.50),
-      hr_z2_max: Math.round(hrMax * 0.75),
-      hr_z3_max: Math.round(hrMax * 0.85),
-      hr_z4_max: Math.round(hrMax * 0.92),
-    };
-  }
-
   function initHrForm(data) {
-    const hrMax = data.hr_max || '';
+    const hrMax = data.hr_max ?? null;
     const defaults = calcDefaultZones(hrMax);
     setHrForm({
       hr_max: hrMax,
-      hr_resting: data.hr_resting || '',
-      hr_z1_max: data.hr_z1_max || defaults.hr_z1_max || '',
-      hr_z2_max: data.hr_z2_max || defaults.hr_z2_max || '',
-      hr_z3_max: data.hr_z3_max || defaults.hr_z3_max || '',
-      hr_z4_max: data.hr_z4_max || defaults.hr_z4_max || '',
+      hr_resting: data.hr_resting ?? null,
+      hr_z1_max: data.hr_z1_max ?? defaults.hr_z1_max ?? null,
+      hr_z2_max: data.hr_z2_max ?? defaults.hr_z2_max ?? null,
+      hr_z3_max: data.hr_z3_max ?? defaults.hr_z3_max ?? null,
+      hr_z4_max: data.hr_z4_max ?? defaults.hr_z4_max ?? null,
     });
   }
 
   function handleHrMaxChange(val) {
-    const hrMax = val ? Math.round(val) : '';
+    const hrMax = val ? Math.round(val) : null;
     const defaults = calcDefaultZones(hrMax);
     setHrForm(prev => ({
       ...prev,
       hr_max: hrMax,
-      hr_z1_max: defaults.hr_z1_max || '',
-      hr_z2_max: defaults.hr_z2_max || '',
-      hr_z3_max: defaults.hr_z3_max || '',
-      hr_z4_max: defaults.hr_z4_max || '',
+      hr_z1_max: defaults.hr_z1_max ?? null,
+      hr_z2_max: defaults.hr_z2_max ?? null,
+      hr_z3_max: defaults.hr_z3_max ?? null,
+      hr_z4_max: defaults.hr_z4_max ?? null,
     }));
   }
 
@@ -184,12 +175,12 @@ export default function AthleteDetailPage() {
     setSavingHr(true);
     try {
       const payload = {
-        hr_max: hrForm.hr_max || null,
-        hr_resting: hrForm.hr_resting || null,
-        hr_z1_max: hrForm.hr_z1_max || null,
-        hr_z2_max: hrForm.hr_z2_max || null,
-        hr_z3_max: hrForm.hr_z3_max || null,
-        hr_z4_max: hrForm.hr_z4_max || null,
+        hr_max: hrForm.hr_max ?? null,
+        hr_resting: hrForm.hr_resting ?? null,
+        hr_z1_max: hrForm.hr_z1_max ?? null,
+        hr_z2_max: hrForm.hr_z2_max ?? null,
+        hr_z3_max: hrForm.hr_z3_max ?? null,
+        hr_z4_max: hrForm.hr_z4_max ?? null,
       };
       await api.updateAthlete(id, payload);
       setAthlete(prev => ({ ...prev, ...payload }));
@@ -590,7 +581,7 @@ export default function AthleteDetailPage() {
                   <input
                     type="number"
                     className="input-field"
-                    value={hrForm.hr_max}
+                    value={hrForm.hr_max ?? ''}
                     onChange={e => handleHrMaxChange(e.target.value ? parseInt(e.target.value) : null)}
                   />
                 </div>
@@ -600,8 +591,8 @@ export default function AthleteDetailPage() {
                     type="number"
                     className="input-field"
                     placeholder="e.g. 55"
-                    value={hrForm.hr_resting}
-                    onChange={e => setHrForm(prev => ({ ...prev, hr_resting: e.target.value ? parseInt(e.target.value) : '' }))}
+                    value={hrForm.hr_resting ?? ''}
+                    onChange={e => setHrForm(prev => ({ ...prev, hr_resting: e.target.value ? parseInt(e.target.value) : null }))}
                   />
                 </div>
               </div>
@@ -609,25 +600,25 @@ export default function AthleteDetailPage() {
               <div className="space-y-3">
                 <HrZoneRow
                   zone="Z1" label="Recovery" color="text-blue-400"
-                  range={`< ${hrForm.hr_z1_max} bpm`}
+                  range={hrForm.hr_z1_max ? `< ${hrForm.hr_z1_max} bpm` : '—'}
                   value={hrForm.hr_z1_max}
                   onChange={val => setHrForm(prev => ({ ...prev, hr_z1_max: val }))}
                 />
                 <HrZoneRow
                   zone="Z2" label="Easy" color="text-green-400"
-                  range={`${hrForm.hr_z1_max} - ${hrForm.hr_z2_max} bpm`}
+                  range={hrForm.hr_z1_max && hrForm.hr_z2_max ? `${hrForm.hr_z1_max} - ${hrForm.hr_z2_max} bpm` : '—'}
                   value={hrForm.hr_z2_max}
                   onChange={val => setHrForm(prev => ({ ...prev, hr_z2_max: val }))}
                 />
                 <HrZoneRow
                   zone="Z3" label="Tempo" color="text-yellow-400"
-                  range={`${hrForm.hr_z2_max} - ${hrForm.hr_z3_max} bpm`}
+                  range={hrForm.hr_z2_max && hrForm.hr_z3_max ? `${hrForm.hr_z2_max} - ${hrForm.hr_z3_max} bpm` : '—'}
                   value={hrForm.hr_z3_max}
                   onChange={val => setHrForm(prev => ({ ...prev, hr_z3_max: val }))}
                 />
                 <HrZoneRow
                   zone="Z4" label="Threshold" color="text-orange-400"
-                  range={`${hrForm.hr_z3_max} - ${hrForm.hr_z4_max} bpm`}
+                  range={hrForm.hr_z3_max && hrForm.hr_z4_max ? `${hrForm.hr_z3_max} - ${hrForm.hr_z4_max} bpm` : '—'}
                   value={hrForm.hr_z4_max}
                   onChange={val => setHrForm(prev => ({ ...prev, hr_z4_max: val }))}
                 />
@@ -636,7 +627,7 @@ export default function AthleteDetailPage() {
                     <span className="text-red-400 font-bold text-xs w-8">Z5</span>
                     <span className="text-xs text-smoke">VO2max</span>
                   </div>
-                  <span className="text-white text-sm">&gt; {hrForm.hr_z4_max} bpm</span>
+                  <span className="text-white text-sm">{hrForm.hr_z4_max ? `> ${hrForm.hr_z4_max} bpm` : '—'}</span>
                 </div>
               </div>
 
@@ -1188,8 +1179,8 @@ function HrZoneRow({ zone, label, color, range, value, onChange }) {
         <input
           type="number"
           className="input-field w-20 text-center text-xs"
-          value={value}
-          onChange={e => onChange(e.target.value ? parseInt(e.target.value) : '')}
+          value={value ?? ''}
+          onChange={e => onChange(e.target.value ? parseInt(e.target.value) : null)}
         />
       </div>
     </div>
