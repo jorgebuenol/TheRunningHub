@@ -101,6 +101,39 @@ export default function MyProfilePage() {
     };
   }, []);
 
+  // HR zone auto-calculation helpers
+  function calcDefaultZones(hrMax) {
+    if (!hrMax) return {};
+    return {
+      hr_z1_max: Math.round(hrMax * 0.50),
+      hr_z2_max: Math.round(hrMax * 0.75),
+      hr_z3_max: Math.round(hrMax * 0.85),
+      hr_z4_max: Math.round(hrMax * 0.92),
+    };
+  }
+
+  function handleHrMaxChange(val) {
+    if (val !== undefined) {
+      const hrMax = val !== null ? Math.round(val) : null;
+      updateField('hr_max', hrMax);
+      if (hrMax) {
+        const defaults = calcDefaultZones(hrMax);
+        if (!athlete.hr_z1_max) updateField('hr_z1_max', defaults.hr_z1_max);
+        if (!athlete.hr_z2_max) updateField('hr_z2_max', defaults.hr_z2_max);
+        if (!athlete.hr_z3_max) updateField('hr_z3_max', defaults.hr_z3_max);
+        if (!athlete.hr_z4_max) updateField('hr_z4_max', defaults.hr_z4_max);
+      }
+    }
+  }
+
+  // Auto-calculate hr_max from age on first load if not set
+  useEffect(() => {
+    if (athlete && athlete.age && !athlete.hr_max) {
+      const estimated = 220 - athlete.age;
+      handleHrMaxChange(estimated);
+    }
+  }, [athlete?.age, athlete?.hr_max]);
+
   async function loadProfile() {
     try {
       const data = await api.getMyProfile();
@@ -209,40 +242,6 @@ export default function MyProfilePage() {
   };
   const previewVdot = getBestVDOT(raceTimes);
   const previewPaces = previewVdot ? getTrainingPaces(previewVdot) : null;
-
-  // HR zone auto-calculation helpers
-  function calcDefaultZones(hrMax) {
-    if (!hrMax) return {};
-    return {
-      hr_z1_max: Math.round(hrMax * 0.50),
-      hr_z2_max: Math.round(hrMax * 0.75),
-      hr_z3_max: Math.round(hrMax * 0.85),
-      hr_z4_max: Math.round(hrMax * 0.92),
-    };
-  }
-
-  function handleHrMaxChange(val) {
-    if (val !== undefined) {
-      const hrMax = val !== null ? Math.round(val) : null;
-      updateField('hr_max', hrMax);
-      // Auto-calculate zone defaults only if zones haven't been manually overridden
-      if (hrMax) {
-        const defaults = calcDefaultZones(hrMax);
-        if (!athlete.hr_z1_max) updateField('hr_z1_max', defaults.hr_z1_max);
-        if (!athlete.hr_z2_max) updateField('hr_z2_max', defaults.hr_z2_max);
-        if (!athlete.hr_z3_max) updateField('hr_z3_max', defaults.hr_z3_max);
-        if (!athlete.hr_z4_max) updateField('hr_z4_max', defaults.hr_z4_max);
-      }
-    }
-  }
-
-  // Auto-calculate hr_max from age on first load if not set
-  useEffect(() => {
-    if (athlete && athlete.age && !athlete.hr_max) {
-      const estimated = 220 - athlete.age;
-      handleHrMaxChange(estimated);
-    }
-  }, [athlete?.age, athlete?.hr_max]);
 
   return (
     <div>
