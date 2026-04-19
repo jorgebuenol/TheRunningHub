@@ -202,8 +202,18 @@ export default function CalendarPage() {
           plannedKm += w.distance_km || 0;
           plannedMin += w.duration_minutes || 0;
           if (w.status === 'completed') {
-            completedKm += w.actual_distance_km || w.distance_km || 0;
+            // If completed row has no distance, fall back to planned row distance for same type
+            const plannedFallback = dayWorkouts.find(
+              p => p.workout_type === w.workout_type && p.status === 'planned' && p.distance_km > 0
+            );
+            completedKm += parseFloat(w.actual_distance_km || w.distance_km || plannedFallback?.distance_km || 0);
             completedMin += w.actual_duration_minutes || w.duration_minutes || 0;
+          }
+        }
+        // Include km from logged activities (strength_sessions) — shown on calendar but not in plan workouts
+        for (const act of activitiesByDate[key] || []) {
+          if (act.distance_km && parseFloat(act.distance_km) > 0) {
+            completedKm += parseFloat(act.distance_km);
           }
         }
       }
@@ -214,7 +224,7 @@ export default function CalendarPage() {
     const acwrZone = acwrObj?.zone || (acwrRatio == null ? null : acwrRatio < 0.8 ? 'low' : acwrRatio > 1.3 ? 'red' : acwrRatio > 1.1 ? 'amber' : 'green');
 
     return { plannedKm, completedKm, plannedMin, completedMin, acwr: acwrRatio, acwrZone };
-  }, [view, weekDates, workoutsByDate, monitoring]);
+  }, [view, weekDates, workoutsByDate, activitiesByDate, monitoring]);
 
   /* ─── Race date ─── */
   const raceDate = plan?.race_date ? parseISO(plan.race_date) : null;
