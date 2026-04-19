@@ -29,10 +29,8 @@ export function calculateACWR(workouts) {
   const twentyOneDaysAgo = new Date(now);
   twentyOneDaysAgo.setDate(twentyOneDaysAgo.getDate() - 21);
 
-  // Deduplicate: prefer 'completed' over 'planned' for same date+type
-  const deduped = deduplicateByDateType(workouts);
-
-  const completed = deduped.filter(w =>
+  // Filter to completed with distance — no dedup needed since planned rows are excluded by status filter
+  const completed = workouts.filter(w =>
     w.status === 'completed' && parseFloat(w.actual_distance_km || w.distance_km || 0) > 0
   );
 
@@ -255,9 +253,10 @@ function getWeeklyKmHistory(workouts, loggedActivities = []) {
     const startStr = start.toISOString().split('T')[0];
     const endStr = end.toISOString().split('T')[0];
 
-    const weekWorkouts = deduplicateByDateType(
-      workouts.filter(wk => wk.workout_date >= startStr && wk.workout_date <= endStr)
-    ).filter(wk => wk.status === 'completed');
+    // Filter to completed only — no dedup so unplanned sessions are included in km total
+    const weekWorkouts = workouts.filter(wk =>
+      wk.workout_date >= startStr && wk.workout_date <= endStr && wk.status === 'completed'
+    );
 
     let km = weekWorkouts.reduce((sum, wk) => sum + parseFloat(wk.actual_distance_km || wk.distance_km || 0), 0);
 

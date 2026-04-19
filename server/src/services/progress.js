@@ -105,7 +105,8 @@ export async function getAthleteProgress(supabase, athleteId) {
     const planned = weekWorkoutsDeduped.filter(wo => wo.workout_type !== 'rest');
     const completed = planned.filter(wo => wo.status === 'completed');
 
-    const completedKm = weekWorkoutsDeduped
+    // Use raw (non-deduped) week workouts so unplanned completed sessions are included
+    const completedKm = weekWorkouts
       .filter(wo => wo.status === 'completed')
       .reduce((s, wo) => s + parseFloat(wo.actual_distance_km || wo.distance_km || 0), 0);
 
