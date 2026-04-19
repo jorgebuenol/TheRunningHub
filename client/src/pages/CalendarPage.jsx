@@ -423,8 +423,8 @@ export default function CalendarPage() {
             <span className="text-smoke text-xs sm:text-sm">Wk {currentWeekData.week_number}</span>
           )}
         </div>
-        {view === 'week' && currentWeekData?.total_km && (
-          <span className="text-volt font-display text-sm sm:text-base">{currentWeekData.total_km}KM</span>
+        {view === 'week' && weekSummary.completedKm > 0 && (
+          <span className="text-volt font-display text-sm sm:text-base">{weekSummary.completedKm.toFixed(1)}KM</span>
         )}
       </div>
 
