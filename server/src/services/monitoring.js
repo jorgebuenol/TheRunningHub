@@ -3,6 +3,19 @@
  */
 
 /**
+ * Deduplicate workouts by (workout_date, workout_type).
+ * When both 'completed' and 'planned' exist for the same slot, keep 'completed'.
+ */
+function deduplicateByDateType(workouts) {
+  const map = new Map();
+  for (const w of workouts) {
+    const key = `${w.workout_date}:${w.workout_type || ''}`;
+    if (!map.has(key) || w.status === 'completed') map.set(key, w);
+  }
+  return Array.from(map.values());
+}
+
+/**
  * Calculate Acute:Chronic Workload Ratio
  * Acute = last 7 days total distance, Chronic = last 28 days avg weekly distance
  * Zones: green (0.8–1.3), yellow (1.3–1.5 or 0.5–0.8), red (>1.5 or <0.5)
@@ -16,19 +29,22 @@ export function calculateACWR(workouts) {
   const twentyOneDaysAgo = new Date(now);
   twentyOneDaysAgo.setDate(twentyOneDaysAgo.getDate() - 21);
 
-  const completed = workouts.filter(w =>
-    w.status === 'completed' && w.distance_km > 0
+  // Deduplicate: prefer 'completed' over 'planned' for same date+type
+  const deduped = deduplicateByDateType(workouts);
+
+  const completed = deduped.filter(w =>
+    w.status === 'completed' && parseFloat(w.actual_distance_km || w.distance_km || 0) > 0
   );
 
   const acuteWorkouts = completed.filter(w =>
     new Date(w.workout_date) >= sevenDaysAgo
   );
-  const acuteKm = acuteWorkouts.reduce((sum, w) => sum + parseFloat(w.distance_km || 0), 0);
+  const acuteKm = acuteWorkouts.reduce((sum, w) => sum + parseFloat(w.actual_distance_km || w.distance_km || 0), 0);
 
   const chronicWorkouts = completed.filter(w =>
     new Date(w.workout_date) >= twentyEightDaysAgo
   );
-  const chronicTotalKm = chronicWorkouts.reduce((sum, w) => sum + parseFloat(w.distance_km || 0), 0);
+  const chronicTotalKm = chronicWorkouts.reduce((sum, w) => sum + parseFloat(w.actual_distance_km || w.distance_km || 0), 0);
   const chronicWeeklyKm = chronicTotalKm / 4;
 
   // Check if athlete has enough training history (>= 3 weeks of data)
@@ -138,10 +154,11 @@ export async function getAthleteMonitoringSummary(supabase, athleteId) {
   // Pain flags (active in last 7 days)
   const painFlags = recentReadiness.filter(r => r.pain_flag);
 
-  // Workout compliance (last 7 days)
-  const plannedThisWeek = workouts.filter(w =>
-    new Date(w.workout_date) >= sevenDaysAgo && w.workout_type !== 'rest'
+  // Workout compliance (last 7 days) — deduplicate before counting
+  const recentDeduped = deduplicateByDateType(
+    workouts.filter(w => new Date(w.workout_date) >= sevenDaysAgo)
   );
+  const plannedThisWeek = recentDeduped.filter(w => w.workout_type !== 'rest');
   const completedThisWeek = plannedThisWeek.filter(w => w.status === 'completed');
   const complianceRate = plannedThisWeek.length > 0
     ? Math.round((completedThisWeek.length / plannedThisWeek.length) * 100)
@@ -173,7 +190,7 @@ export async function getAthleteMonitoringSummary(supabase, athleteId) {
   const highRpeDays = rpe7dTrend.filter(d => d.rpe !== null && d.rpe > 8).length;
   if (highRpeDays >= 3) flags.push({ type: 'rpe', message: `High RPE (>8) for ${highRpeDays} of last 7 days` });
   // Only flag low compliance after at least 1 full week of planned workouts
-  const allPlannedWorkouts = workouts.filter(w => w.workout_type !== 'rest');
+  const allPlannedWorkouts = deduplicateByDateType(workouts).filter(w => w.workout_type !== 'rest');
   const oldestPlannedDate = allPlannedWorkouts.length > 0 ? new Date(allPlannedWorkouts[0].workout_date) : null;
   const planHasFullWeek = oldestPlannedDate && (now - oldestPlannedDate) / 86400000 >= 7;
   if (planHasFullWeek && complianceRate !== null && complianceRate < 60) flags.push({ type: 'compliance', message: `Low compliance: ${complianceRate}%` });
@@ -238,13 +255,11 @@ function getWeeklyKmHistory(workouts, loggedActivities = []) {
     const startStr = start.toISOString().split('T')[0];
     const endStr = end.toISOString().split('T')[0];
 
-    const weekWorkouts = workouts.filter(wk =>
-      wk.status === 'completed' &&
-      wk.workout_date >= startStr &&
-      wk.workout_date <= endStr
-    );
+    const weekWorkouts = deduplicateByDateType(
+      workouts.filter(wk => wk.workout_date >= startStr && wk.workout_date <= endStr)
+    ).filter(wk => wk.status === 'completed');
 
-    let km = weekWorkouts.reduce((sum, wk) => sum + parseFloat(wk.distance_km || 0), 0);
+    let km = weekWorkouts.reduce((sum, wk) => sum + parseFloat(wk.actual_distance_km || wk.distance_km || 0), 0);
 
     // Add km from logged activities (strength_sessions with distance)
     const weekActivities = loggedActivities.filter(a =>

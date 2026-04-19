@@ -1,5 +1,14 @@
 import { calculateACWR } from './monitoring.js';
 
+function deduplicateByDateType(workouts) {
+  const map = new Map();
+  for (const w of workouts) {
+    const key = `${w.workout_date}:${w.workout_type}`;
+    if (!map.has(key) || w.status === 'completed') map.set(key, w);
+  }
+  return Array.from(map.values());
+}
+
 export function getWeekBounds() {
   const now = new Date();
   const day = now.getUTCDay(); // 0=Sun, 1=Mon...
@@ -55,7 +64,7 @@ export async function getAthleteWeeklySummary(supabase, { id: athleteId, name, e
       .eq('pain_flag', true),
   ]);
 
-  const workouts = thisWeekResult.data || [];
+  const workouts = deduplicateByDateType(thisWeekResult.data || []);
   // Only running/cardio types count for adherence — exclude rest and cross_training (strength days)
   const RUN_TYPES = new Set(['easy', 'tempo', 'long_run', 'intervals', 'race_pace', 'recovery', 'race']);
   const planned = workouts.filter(w => RUN_TYPES.has(w.workout_type));
