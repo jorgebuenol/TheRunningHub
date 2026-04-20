@@ -216,16 +216,30 @@ export default function AthleteMonitoringPage() {
                     <p className="text-smoke text-[10px] uppercase">Feel</p>
                     <p className="text-lg">{FEELING_EMOJI[fb.feeling] || '—'}</p>
                   </div>
-                  {fb.actual_distance_km && (
+                  {(fb.actual_distance_km || fb.workouts?.distance_km) && (
                     <div className="text-center">
                       <p className="text-smoke text-[10px] uppercase">Dist</p>
-                      <p className="text-sm font-bold">{fb.actual_distance_km}km</p>
+                      {fb.actual_distance_km
+                        ? <p className="text-sm font-bold">{fb.actual_distance_km}km</p>
+                        : <p className="text-sm font-bold text-smoke">—</p>
+                      }
+                      {fb.workouts?.distance_km && (
+                        <p className="text-smoke text-[10px]">plan {fb.workouts.distance_km}km</p>
+                      )}
                     </div>
                   )}
-                  {fb.actual_pace_sec_km && (
+                  {(fb.actual_pace_sec_km || fb.workouts?.pace_range_min) && (
                     <div className="text-center">
                       <p className="text-smoke text-[10px] uppercase">Pace</p>
-                      <p className="text-sm font-bold">{formatPace(fb.actual_pace_sec_km)}/km</p>
+                      {fb.actual_pace_sec_km
+                        ? <p className="text-sm font-bold">{formatPace(fb.actual_pace_sec_km)}/km</p>
+                        : <p className="text-sm font-bold text-smoke">—</p>
+                      }
+                      {fb.workouts?.pace_range_min && (
+                        <p className="text-smoke text-[10px]">
+                          plan {formatPace(fb.workouts.pace_range_min)}{fb.workouts.pace_range_max ? `–${formatPace(fb.workouts.pace_range_max)}` : ''}
+                        </p>
+                      )}
                     </div>
                   )}
                   {fb.avg_hr && (

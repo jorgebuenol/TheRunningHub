@@ -105,7 +105,7 @@ export async function getAthleteMonitoringSummary(supabase, athleteId) {
     // Last 42 days feedback
     supabase
       .from('workout_feedback')
-      .select('*, workouts(workout_date, title, workout_type, distance_km)')
+      .select('*, workouts(workout_date, title, workout_type, distance_km, pace_range_min, pace_range_max)')
       .eq('athlete_id', athleteId)
       .order('created_at', { ascending: false })
       .limit(50),
