@@ -200,43 +200,43 @@ export default function AthleteMonitoringPage() {
         ) : (
           <div className="space-y-3">
             {feedback.recent.slice(0, 10).map(fb => (
-              <div key={fb.id} className="flex items-center justify-between py-3 border-b border-ash last:border-0">
+              <div key={fb.id} className="flex items-start justify-between py-4 border-b border-ash last:border-0">
                 <div>
-                  <p className="font-semibold text-sm">{fb.workouts?.title || 'Workout'}</p>
-                  <p className="text-smoke text-xs">{fb.workouts?.workout_date} — {fb.workouts?.workout_type}</p>
+                  <p className="font-semibold text-base">{fb.workouts?.title || 'Workout'}</p>
+                  <p className="text-smoke text-sm mt-0.5">{fb.workouts?.workout_date} — {fb.workouts?.workout_type}</p>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-start gap-6">
                   <div className="text-center">
-                    <p className="text-smoke text-[10px] uppercase">RPE</p>
-                    <p className={`font-bold ${fb.rpe <= 6 ? 'text-green-400' : fb.rpe <= 8 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    <p className="text-smoke text-xs uppercase mb-1">RPE</p>
+                    <p className={`text-lg font-bold ${fb.rpe <= 6 ? 'text-green-400' : fb.rpe <= 8 ? 'text-yellow-400' : 'text-red-400'}`}>
                       {fb.rpe}
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-smoke text-[10px] uppercase">Feel</p>
-                    <p className="text-lg">{FEELING_EMOJI[fb.feeling] || '—'}</p>
+                    <p className="text-smoke text-xs uppercase mb-1">Feel</p>
+                    <p className="text-xl">{FEELING_EMOJI[fb.feeling] || '—'}</p>
                   </div>
                   {(fb.actual_distance_km || fb.workouts?.distance_km) && (
                     <div className="text-center">
-                      <p className="text-smoke text-[10px] uppercase">Dist</p>
+                      <p className="text-smoke text-xs uppercase mb-1">Dist</p>
                       {fb.actual_distance_km
-                        ? <p className="text-sm font-bold">{fb.actual_distance_km}km</p>
-                        : <p className="text-sm font-bold text-smoke">—</p>
+                        ? <p className="text-base font-bold">{fb.actual_distance_km}km</p>
+                        : <p className="text-base font-bold text-smoke">—</p>
                       }
                       {fb.workouts?.distance_km && (
-                        <p className="text-smoke text-[10px]">plan {fb.workouts.distance_km}km</p>
+                        <p className="text-smoke text-xs mt-0.5">plan {fb.workouts.distance_km}km</p>
                       )}
                     </div>
                   )}
                   {(fb.actual_pace_sec_km || fb.workouts?.pace_range_min) && (
                     <div className="text-center">
-                      <p className="text-smoke text-[10px] uppercase">Pace</p>
+                      <p className="text-smoke text-xs uppercase mb-1">Pace</p>
                       {fb.actual_pace_sec_km
-                        ? <p className="text-sm font-bold">{formatPace(fb.actual_pace_sec_km)}/km</p>
-                        : <p className="text-sm font-bold text-smoke">—</p>
+                        ? <p className="text-base font-bold">{formatPace(fb.actual_pace_sec_km)}/km</p>
+                        : <p className="text-base font-bold text-smoke">—</p>
                       }
                       {fb.workouts?.pace_range_min && (
-                        <p className="text-smoke text-[10px]">
+                        <p className="text-smoke text-xs mt-0.5">
                           plan {formatPace(fb.workouts.pace_range_min)}{fb.workouts.pace_range_max ? `–${formatPace(fb.workouts.pace_range_max)}` : ''}
                         </p>
                       )}
@@ -244,8 +244,8 @@ export default function AthleteMonitoringPage() {
                   )}
                   {fb.avg_hr && (
                     <div className="text-center">
-                      <p className="text-smoke text-[10px] uppercase">Avg HR</p>
-                      <p className="text-sm font-bold">{fb.avg_hr}<span className="text-smoke text-[10px]">bpm</span></p>
+                      <p className="text-smoke text-xs uppercase mb-1">Avg HR</p>
+                      <p className="text-base font-bold">{fb.avg_hr}<span className="text-smoke text-xs ml-0.5">bpm</span></p>
                     </div>
                   )}
                 </div>
