@@ -8,6 +8,13 @@ const ACWR_COLORS = { green: 'text-green-400', yellow: 'text-yellow-400', red: '
 const ACWR_BG = { green: 'bg-green-500/10 border-green-500', yellow: 'bg-yellow-500/10 border-yellow-500', red: 'bg-red-500/10 border-red-500', insufficient: 'bg-smoke/10 border-ash' };
 const FEELING_EMOJI = { great: '😄', good: '😊', ok: '😐', bad: '😟', terrible: '😫' };
 
+function formatPace(secPerKm) {
+  if (!secPerKm) return null;
+  const min = Math.floor(secPerKm / 60);
+  const sec = Math.round(secPerKm % 60);
+  return `${min}:${String(sec).padStart(2, '0')}`;
+}
+
 export default function AthleteMonitoringPage() {
   const { id } = useParams();
   const [athlete, setAthlete] = useState(null);
@@ -213,6 +220,18 @@ export default function AthleteMonitoringPage() {
                     <div className="text-center">
                       <p className="text-smoke text-[10px] uppercase">Dist</p>
                       <p className="text-sm font-bold">{fb.actual_distance_km}km</p>
+                    </div>
+                  )}
+                  {fb.actual_pace_sec_km && (
+                    <div className="text-center">
+                      <p className="text-smoke text-[10px] uppercase">Pace</p>
+                      <p className="text-sm font-bold">{formatPace(fb.actual_pace_sec_km)}/km</p>
+                    </div>
+                  )}
+                  {fb.avg_hr && (
+                    <div className="text-center">
+                      <p className="text-smoke text-[10px] uppercase">Avg HR</p>
+                      <p className="text-sm font-bold">{fb.avg_hr}<span className="text-smoke text-[10px]">bpm</span></p>
                     </div>
                   )}
                 </div>
