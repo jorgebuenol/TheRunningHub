@@ -193,6 +193,9 @@ export default function PlanViewPage() {
       pace_from: secToMmss(workout.pace_range_min),
       pace_to: secToMmss(workout.pace_range_max),
       hr_zone: workout.hr_zone || '',
+      target_type: workout.target_type || 'pace',
+      hr_target_min: workout.hr_target_min || '',
+      hr_target_max: workout.hr_target_max || '',
       coach_notes: workout.coach_notes || '',
     });
   }
@@ -208,6 +211,9 @@ export default function PlanViewPage() {
         pace_range_min: mmssToSec(editForm.pace_from),
         pace_range_max: mmssToSec(editForm.pace_to),
         hr_zone: editForm.hr_zone || null,
+        target_type: editForm.target_type || 'pace',
+        hr_target_min: editForm.hr_target_min ? parseInt(editForm.hr_target_min) : null,
+        hr_target_max: editForm.hr_target_max ? parseInt(editForm.hr_target_max) : null,
         coach_notes: editForm.coach_notes,
       };
       await api.updateWorkout(workoutId, updates);
@@ -678,9 +684,11 @@ export default function PlanViewPage() {
                                 {formatPace(workout.pace_range_min)}-{formatPace(workout.pace_range_max)}
                               </p>
                             )}
-                            {workout.hr_zone && (
+                            {workout.target_type === 'hr' && workout.hr_target_min && workout.hr_target_max ? (
+                              <p className="text-red-400 text-xs font-semibold">HR {workout.hr_target_min}-{workout.hr_target_max} bpm</p>
+                            ) : workout.hr_zone ? (
                               <p className="text-smoke text-xs">{safeStr(workout.hr_zone)}</p>
-                            )}
+                            ) : null}
                             {isExpanded && (
                               <div className="mt-2 pt-2 border-t border-ash/50 space-y-1">
                                 {workout.duration_minutes && <p className="text-smoke text-xs">{formatTime(Math.round(workout.duration_minutes * 60))}</p>}
@@ -844,6 +852,19 @@ export default function PlanViewPage() {
               </div>
 
               <div>
+                <label className="text-sm font-bold uppercase tracking-wider mb-2 block">Target Type</label>
+                <select
+                  value={editForm.target_type}
+                  onChange={e => setEditForm(f => ({ ...f, target_type: e.target.value }))}
+                  className="input-field"
+                >
+                  <option value="pace">Pace-based</option>
+                  <option value="hr">HR-based</option>
+                  <option value="rpe">RPE-based</option>
+                </select>
+              </div>
+
+              <div>
                 <label className="text-sm font-bold uppercase tracking-wider mb-2 block">HR Zone</label>
                 <select
                   value={editForm.hr_zone}
@@ -854,6 +875,34 @@ export default function PlanViewPage() {
                   {HR_ZONES.map(z => <option key={z} value={z}>{z}</option>)}
                 </select>
               </div>
+
+              {editForm.target_type === 'hr' && (
+                <div>
+                  <label className="text-sm font-bold uppercase tracking-wider mb-2 block">HR Target Range (bpm)</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <span className="text-smoke text-xs block mb-1">Min</span>
+                      <input
+                        type="number"
+                        value={editForm.hr_target_min}
+                        onChange={e => setEditForm(f => ({ ...f, hr_target_min: e.target.value }))}
+                        className="input-field"
+                        placeholder="e.g. 130"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-smoke text-xs block mb-1">Max</span>
+                      <input
+                        type="number"
+                        value={editForm.hr_target_max}
+                        onChange={e => setEditForm(f => ({ ...f, hr_target_max: e.target.value }))}
+                        className="input-field"
+                        placeholder="e.g. 145"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="text-sm font-bold uppercase tracking-wider mb-2 block">Description</label>
@@ -954,6 +1003,7 @@ export default function PlanViewPage() {
                     'Make week 3 easier',
                     'Add more tempo in build phase',
                     'Reduce long run distances',
+                    'Change easy runs to HR-based Z2',
                     'Is the taper long enough?',
                   ].map(s => (
                     <button

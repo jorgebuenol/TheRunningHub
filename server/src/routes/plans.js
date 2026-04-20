@@ -4,6 +4,7 @@ import { sendPlanPublishedEmail } from './email.js';
 import { generateTrainingPlan, generateMacroPlan, generateCouchToRunMacro, generateWeeklyDetail, checkRedFlags, deriveAthleteLevel, intensityFromPhase } from '../services/planGenerator.js';
 import { getAthleteMonitoringSummary } from '../services/monitoring.js';
 import { addDays, startOfWeek } from '../utils/dates.js';
+import { calcDefaultZones } from '../utils/hrZones.js';
 
 export const planRoutes = Router();
 
@@ -46,6 +47,7 @@ const VALID_WORKOUT_FIELDS = new Set([
   'pace_range_min', 'pace_range_max', 'hr_zone',
   'title', 'description', 'workout_type', 'coach_notes',
   'intervals_detail', 'session_structure', 'rpe_target', 'status',
+  'target_type', 'hr_target_min', 'hr_target_max',
 ]);
 
 // These JSONB columns are allowed to be objects
@@ -92,7 +94,7 @@ function sanitizeWorkoutFields(changes) {
 planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
   try {
     const { athleteId } = req.params;
-    const { levelOverride, vdotOverride, magicMileSeconds, isRunWalk, isCouchToRun } = req.body || {};
+    const { levelOverride, vdotOverride, magicMileSeconds, isRunWalk, isCouchToRun, trainingMethod } = req.body || {};
 
     // Fetch athlete with profile
     const { data: athlete, error: athleteErr } = await req.supabase
@@ -120,7 +122,7 @@ planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
     }
 
     // Build overrides object for AI prompt
-    const overrides = { levelOverride, vdotOverride: effectiveVdot, isRunWalk };
+    const overrides = { levelOverride, vdotOverride: effectiveVdot, isRunWalk, trainingMethod };
 
     // Generate macro periodization skeleton
     let macroPlan;
@@ -163,6 +165,7 @@ planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
         race_date: athlete.goal_race_date,
         total_weeks: weeksToRace,
         ai_model: 'claude-sonnet-4-20250514',
+        ai_prompt: trainingMethod && trainingMethod !== 'pace' ? JSON.stringify({ trainingMethod }) : null,
         status: 'draft',
       })
       .select()
@@ -269,6 +272,15 @@ planRoutes.post('/:planId/weeks/:weekId/generate', coachOnly, async (req, res, n
       .filter(w => Math.abs(w.week_number - targetWeek.week_number) <= 2 && w.week_number !== targetWeek.week_number)
       .map(w => ({ week_number: w.week_number, phase: w.phase, km_target: w.km_target, intensity: w.intensity }));
 
+    // Derive training method from plan's ai_prompt metadata
+    let planTrainingMethod = 'pace';
+    if (fullPlan.ai_prompt) {
+      try {
+        const meta = JSON.parse(fullPlan.ai_prompt);
+        if (meta.trainingMethod) planTrainingMethod = meta.trainingMethod;
+      } catch {}
+    }
+
     // 6. Generate weekly detail via AI (pass red flag warnings into prompt)
     let weekDetail;
     try {
@@ -279,6 +291,7 @@ planRoutes.post('/:planId/weeks/:weekId/generate', coachOnly, async (req, res, n
           ...effectiveWeek,
           total_weeks: fullPlan.total_weeks,
           surrounding,
+          trainingMethod: planTrainingMethod,
         },
         monitoringData,
         previousWeeksSummary,
@@ -314,11 +327,34 @@ planRoutes.post('/:planId/weeks/:weekId/generate', coachOnly, async (req, res, n
           pace_range_min: w.pace_range_min,
           pace_range_max: w.pace_range_max,
           hr_zone: w.hr_zone,
+          target_type: w.target_type || null,
+          hr_target_min: w.hr_target_min || null,
+          hr_target_max: w.hr_target_max || null,
           intervals_detail: w.intervals_detail,
           coach_notes: w.coach_notes,
           session_structure: w.session_structure || null,
           rpe_target: w.rpe_target || null,
         });
+
+        // If HR-based training method and this is an easy/recovery/long_run workout, set HR targets
+        const hrFields = {};
+        if (planTrainingMethod === 'hr' && ['easy', 'recovery', 'long_run'].includes(w.workout_type)) {
+          hrFields.target_type = 'hr';
+          if (athlete.hr_z1_max && athlete.hr_z2_max) {
+            hrFields.hr_target_min = athlete.hr_z1_max;
+            hrFields.hr_target_max = athlete.hr_z2_max;
+          } else if (athlete.hr_max) {
+            // Fallback: derive zones from hr_max using default percentages
+            const defaults = calcDefaultZones(athlete.hr_max);
+            hrFields.hr_target_min = defaults.hr_z1_max;
+            hrFields.hr_target_max = defaults.hr_z2_max;
+            console.warn(`Athlete ${athlete.id}: HR zones missing, using defaults from hr_max (${athlete.hr_max})`);
+          } else {
+            // No HR data at all — fall back to pace-based targeting
+            hrFields.target_type = 'pace';
+            console.warn(`Athlete ${athlete.id}: HR-based plan requested but no HR data available, falling back to pace`);
+          }
+        }
 
         return {
           plan_week_id: weekId,
@@ -326,6 +362,7 @@ planRoutes.post('/:planId/weeks/:weekId/generate', coachOnly, async (req, res, n
           day_of_week: normalizedDay,
           workout_date: workoutDate.toISOString().split('T')[0],
           ...safeFields,
+          ...hrFields,
         };
       })
       .filter(Boolean);
@@ -496,6 +533,9 @@ planRoutes.post('/:planId/unpublish', coachOnly, async (req, res, next) => {
           pace_range_min: w.pace_range_min,
           pace_range_max: w.pace_range_max,
           hr_zone: w.hr_zone,
+          target_type: w.target_type || null,
+          hr_target_min: w.hr_target_min || null,
+          hr_target_max: w.hr_target_max || null,
           intervals_detail: w.intervals_detail,
           coach_notes: w.coach_notes,
           session_structure: w.session_structure || null,

@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { formatPace, formatTime } from '../lib/vdot';
 import { getOverallProgress, getSectionStatus, ONBOARDING_SECTIONS } from '@shared/onboardingProgress';
+import { calcDefaultZones } from '@shared/hrZones';
 import {
   Zap, Calendar, Target, TrendingUp, RefreshCw, Send, ArrowLeft,
   Activity, Shield, AlertTriangle, CheckCircle, Circle, CircleDot,
@@ -105,6 +106,10 @@ export default function AthleteDetailPage() {
   const [confirmDeleteAthlete, setConfirmDeleteAthlete] = useState(false);
   const [deletingAthlete, setDeletingAthlete] = useState(false);
 
+  // HR Zones editing state
+  const [hrForm, setHrForm] = useState(null);
+  const [savingHr, setSavingHr] = useState(false);
+
   // Pre-generation modal state
   const [showGenModal, setShowGenModal] = useState(false);
   const [genOverrides, setGenOverrides] = useState({
@@ -132,10 +137,59 @@ export default function AthleteDetailPage() {
       ]);
       setAthlete(data);
       setMonitoring(mon);
+      initHrForm(data);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  function initHrForm(data) {
+    const hrMax = data.hr_max ?? null;
+    const defaults = calcDefaultZones(hrMax);
+    setHrForm({
+      hr_max: hrMax,
+      hr_resting: data.hr_resting ?? null,
+      hr_z1_max: data.hr_z1_max ?? defaults.hr_z1_max ?? null,
+      hr_z2_max: data.hr_z2_max ?? defaults.hr_z2_max ?? null,
+      hr_z3_max: data.hr_z3_max ?? defaults.hr_z3_max ?? null,
+      hr_z4_max: data.hr_z4_max ?? defaults.hr_z4_max ?? null,
+    });
+  }
+
+  function handleHrMaxChange(val) {
+    const hrMax = val ? Math.round(val) : null;
+    const defaults = calcDefaultZones(hrMax);
+    setHrForm(prev => ({
+      ...prev,
+      hr_max: hrMax,
+      hr_z1_max: defaults.hr_z1_max ?? null,
+      hr_z2_max: defaults.hr_z2_max ?? null,
+      hr_z3_max: defaults.hr_z3_max ?? null,
+      hr_z4_max: defaults.hr_z4_max ?? null,
+    }));
+  }
+
+  async function saveHrZones() {
+    setSavingHr(true);
+    try {
+      const payload = {
+        hr_max: hrForm.hr_max ?? null,
+        hr_resting: hrForm.hr_resting ?? null,
+        hr_z1_max: hrForm.hr_z1_max ?? null,
+        hr_z2_max: hrForm.hr_z2_max ?? null,
+        hr_z3_max: hrForm.hr_z3_max ?? null,
+        hr_z4_max: hrForm.hr_z4_max ?? null,
+      };
+      await api.updateAthlete(id, payload);
+      setAthlete(prev => ({ ...prev, ...payload }));
+      setMessage('Heart rate zones saved.');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setMessage(`Error saving HR zones: ${err.message}`);
+    } finally {
+      setSavingHr(false);
     }
   }
 
@@ -148,6 +202,7 @@ export default function AthleteDetailPage() {
       magicMileSec: '',
       isRunWalk: false,
       isCouchToRun: false,
+      trainingMethod: 'pace',
       canRun10Min: '',
       longestRunMinutes: '',
       runningFrequency: '',
@@ -165,6 +220,9 @@ export default function AthleteDetailPage() {
       if (genOverrides.vdotOverride) overrides.vdotOverride = parseInt(genOverrides.vdotOverride);
       if (genOverrides.isRunWalk) overrides.isRunWalk = true;
       if (genOverrides.isCouchToRun) overrides.isCouchToRun = true;
+      if (genOverrides.trainingMethod && genOverrides.trainingMethod !== 'pace') {
+        overrides.trainingMethod = genOverrides.trainingMethod;
+      }
 
       // Calculate Magic Mile seconds if provided
       const mm = parseInt(genOverrides.magicMileMin) || 0;
@@ -471,6 +529,8 @@ export default function AthleteDetailPage() {
             <FieldValue label="Intervals.icu API Key" value={athlete.intervals_icu_api_key ? '••••••••' : null} />
           </div>
         </ProfileSection>
+
+        {/* HR Zones moved below Training Paces */}
       </div>
 
       {/* Training Paces */}
@@ -484,6 +544,105 @@ export default function AthleteDetailPage() {
           <PaceRow label="Interval" value={formatPace(athlete.pace_vo2max)} color="text-volt" />
         </div>
       </div>
+
+      {/* Heart Rate Zones */}
+      {hrForm && (
+        <div className="card mb-8">
+          <h2 className="font-display text-xl mb-4">HEART RATE ZONES</h2>
+
+          {!hrForm.hr_max ? (
+            <div>
+              <p className="text-smoke text-sm mb-4">Set Max HR to calculate zones</p>
+              <div className="max-w-xs">
+                <label className="label">Max HR (bpm)</label>
+                <input
+                  type="number"
+                  className="input-field"
+                  placeholder="e.g. 190"
+                  value={hrForm.hr_max}
+                  onChange={e => handleHrMaxChange(e.target.value ? parseInt(e.target.value) : null)}
+                />
+                {athlete.age && (
+                  <button
+                    type="button"
+                    onClick={() => handleHrMaxChange(220 - athlete.age)}
+                    className="text-volt text-xs mt-1 hover:underline cursor-pointer"
+                  >
+                    Estimated: {220 - athlete.age} bpm (click to use)
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="label">Max HR (bpm)</label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    value={hrForm.hr_max ?? ''}
+                    onChange={e => handleHrMaxChange(e.target.value ? parseInt(e.target.value) : null)}
+                  />
+                </div>
+                <div>
+                  <label className="label">Resting HR (bpm)</label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    placeholder="e.g. 55"
+                    value={hrForm.hr_resting ?? ''}
+                    onChange={e => setHrForm(prev => ({ ...prev, hr_resting: e.target.value ? parseInt(e.target.value) : null }))}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <HrZoneRow
+                  zone="Z1" label="Recovery" color="text-blue-400"
+                  range={hrForm.hr_z1_max ? `< ${hrForm.hr_z1_max} bpm` : '—'}
+                  value={hrForm.hr_z1_max}
+                  onChange={val => setHrForm(prev => ({ ...prev, hr_z1_max: val }))}
+                />
+                <HrZoneRow
+                  zone="Z2" label="Easy" color="text-green-400"
+                  range={hrForm.hr_z1_max && hrForm.hr_z2_max ? `${hrForm.hr_z1_max} - ${hrForm.hr_z2_max} bpm` : '—'}
+                  value={hrForm.hr_z2_max}
+                  onChange={val => setHrForm(prev => ({ ...prev, hr_z2_max: val }))}
+                />
+                <HrZoneRow
+                  zone="Z3" label="Tempo" color="text-yellow-400"
+                  range={hrForm.hr_z2_max && hrForm.hr_z3_max ? `${hrForm.hr_z2_max} - ${hrForm.hr_z3_max} bpm` : '—'}
+                  value={hrForm.hr_z3_max}
+                  onChange={val => setHrForm(prev => ({ ...prev, hr_z3_max: val }))}
+                />
+                <HrZoneRow
+                  zone="Z4" label="Threshold" color="text-orange-400"
+                  range={hrForm.hr_z3_max && hrForm.hr_z4_max ? `${hrForm.hr_z3_max} - ${hrForm.hr_z4_max} bpm` : '—'}
+                  value={hrForm.hr_z4_max}
+                  onChange={val => setHrForm(prev => ({ ...prev, hr_z4_max: val }))}
+                />
+                <div className="flex items-center justify-between py-2 border-b border-ash last:border-0">
+                  <div className="flex items-center gap-3">
+                    <span className="text-red-400 font-bold text-xs w-8">Z5</span>
+                    <span className="text-xs text-smoke">VO2max</span>
+                  </div>
+                  <span className="text-white text-sm">{hrForm.hr_z4_max ? `> ${hrForm.hr_z4_max} bpm` : '—'}</span>
+                </div>
+              </div>
+
+              <button
+                onClick={saveHrZones}
+                disabled={savingHr}
+                className="btn-primary mt-4 flex items-center gap-2"
+              >
+                <CheckCircle size={14} />
+                {savingHr ? 'SAVING...' : 'SAVE HR ZONES'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Monitoring Quick View */}
       {monitoring && (
@@ -845,6 +1004,38 @@ function PreGenerationModal({ athlete, genOverrides, setGenOverrides, onConfirm,
 
         <div className="border-t border-ash my-4" />
 
+        {/* Training Method */}
+        <div className="mb-4">
+          <h4 className="font-display text-sm text-smoke mb-3">TRAINING METHOD</h4>
+          <div className="flex gap-2">
+            {[
+              { value: 'pace', label: 'PACE-BASED', desc: 'Target pace per km' },
+              { value: 'hr', label: 'HR-BASED', desc: 'Target heart rate zones' },
+              { value: 'rpe', label: 'RPE-BASED', desc: 'Rate of perceived exertion' },
+            ].map(m => (
+              <button
+                key={m.value}
+                onClick={() => setGenOverrides(o => ({ ...o, trainingMethod: m.value }))}
+                className={`flex-1 px-3 py-2 border text-xs font-bold uppercase tracking-wider transition-colors ${
+                  genOverrides.trainingMethod === m.value
+                    ? 'border-volt text-volt bg-volt/10'
+                    : 'border-ash text-smoke hover:border-volt/50'
+                }`}
+              >
+                <p>{m.label}</p>
+                <p className="text-[10px] font-normal normal-case mt-0.5">{m.desc}</p>
+              </button>
+            ))}
+          </div>
+          {genOverrides.trainingMethod === 'hr' && !athlete.hr_max && (
+            <p className="text-yellow-400 text-xs mt-2">
+              HR zones not set for this athlete. Set them in the athlete profile first, or zones will be auto-calculated from age.
+            </p>
+          )}
+        </div>
+
+        <div className="border-t border-ash my-4" />
+
         {/* Coach Overrides */}
         <div className="mb-4">
           <h4 className="font-display text-sm text-smoke mb-3">COACH OVERRIDES (optional)</h4>
@@ -972,6 +1163,26 @@ function PaceRow({ label, value, color }) {
     <div className="flex items-center justify-between py-2 border-b border-ash last:border-0">
       <span className="text-smoke text-sm uppercase">{label}</span>
       <span className={`font-semibold ${color}`}>{value} /km</span>
+    </div>
+  );
+}
+
+function HrZoneRow({ zone, label, color, range, value, onChange }) {
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-ash">
+      <div className="flex items-center gap-3">
+        <span className={`${color} font-bold text-xs w-8`}>{zone}</span>
+        <span className="text-xs text-smoke">{label}</span>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="text-white text-sm">{range}</span>
+        <input
+          type="number"
+          className="input-field w-20 text-center text-xs"
+          value={value ?? ''}
+          onChange={e => onChange(e.target.value ? parseInt(e.target.value) : null)}
+        />
+      </div>
     </div>
   );
 }

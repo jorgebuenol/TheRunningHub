@@ -17,7 +17,10 @@
     ],
     "deny": [
       "Bash(git push --force*)",
-      "Bash(rm -rf /Users/buenojor/TheRunningHub/.git*)"
+      "Bash(rm -rf /Users/mac/Dev/TheRunningHub/.git*)"
     ]
+  },
+  "enabledPlugins": {
+    "imessage@claude-plugins-official": true
   }
 }

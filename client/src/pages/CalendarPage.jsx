@@ -202,8 +202,18 @@ export default function CalendarPage() {
           plannedKm += w.distance_km || 0;
           plannedMin += w.duration_minutes || 0;
           if (w.status === 'completed') {
-            completedKm += w.actual_distance_km || w.distance_km || 0;
+            // If completed row has no distance, fall back to planned row distance for same type
+            const plannedFallback = dayWorkouts.find(
+              p => p.workout_type === w.workout_type && p.status === 'planned' && p.distance_km > 0
+            );
+            completedKm += parseFloat(w.actual_distance_km || w.distance_km || plannedFallback?.distance_km || 0);
             completedMin += w.actual_duration_minutes || w.duration_minutes || 0;
+          }
+        }
+        // Include km from logged activities (strength_sessions) — shown on calendar but not in plan workouts
+        for (const act of activitiesByDate[key] || []) {
+          if (act.distance_km && parseFloat(act.distance_km) > 0) {
+            completedKm += parseFloat(act.distance_km);
           }
         }
       }
@@ -214,7 +224,7 @@ export default function CalendarPage() {
     const acwrZone = acwrObj?.zone || (acwrRatio == null ? null : acwrRatio < 0.8 ? 'low' : acwrRatio > 1.3 ? 'red' : acwrRatio > 1.1 ? 'amber' : 'green');
 
     return { plannedKm, completedKm, plannedMin, completedMin, acwr: acwrRatio, acwrZone };
-  }, [view, weekDates, workoutsByDate, monitoring]);
+  }, [view, weekDates, workoutsByDate, activitiesByDate, monitoring]);
 
   /* ─── Race date ─── */
   const raceDate = plan?.race_date ? parseISO(plan.race_date) : null;
@@ -413,8 +423,8 @@ export default function CalendarPage() {
             <span className="text-smoke text-xs sm:text-sm">Wk {currentWeekData.week_number}</span>
           )}
         </div>
-        {view === 'week' && currentWeekData?.total_km && (
-          <span className="text-volt font-display text-sm sm:text-base">{currentWeekData.total_km}KM</span>
+        {view === 'week' && weekSummary.completedKm > 0 && (
+          <span className="text-volt font-display text-sm sm:text-base">{weekSummary.completedKm.toFixed(1)}KM</span>
         )}
       </div>
 
@@ -512,11 +522,15 @@ export default function CalendarPage() {
                       {workout.distance_km > 0 && (
                         <p className="text-volt text-lg font-display mt-2">{workout.distance_km}KM</p>
                       )}
-                      {workout.pace_range_min && workout.pace_range_max && (
+                      {workout.target_type === 'hr' && workout.hr_target_min && workout.hr_target_max ? (
+                        <p className="text-red-400 text-xs mt-1 font-semibold">
+                          HR {workout.hr_target_min}-{workout.hr_target_max} bpm
+                        </p>
+                      ) : workout.pace_range_min && workout.pace_range_max ? (
                         <p className="text-smoke text-xs mt-1">
                           {formatPace(workout.pace_range_min)}-{formatPace(workout.pace_range_max)}/km
                         </p>
-                      )}
+                      ) : null}
                       {workout.duration_minutes > 0 && (
                         <p className="text-smoke text-xs mt-1">{formatTime(Math.round(workout.duration_minutes * 60))}</p>
                       )}

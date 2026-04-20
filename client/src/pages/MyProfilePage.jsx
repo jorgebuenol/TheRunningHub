@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { api } from '../lib/api';
 import { getBestVDOT, getTrainingPaces, formatPace, parseTime, formatTime } from '../lib/vdot';
 import { ONBOARDING_SECTIONS, getSectionStatus, getOverallProgress } from '@shared/onboardingProgress';
+import { calcDefaultZones } from '@shared/hrZones';
 import {
   ChevronDown, ChevronRight, Check, Circle, CircleDot, CheckCircle,
   User, Activity, Target, Calendar, Heart, Moon, Apple, Briefcase,
@@ -100,6 +101,28 @@ export default function MyProfilePage() {
       }
     };
   }, []);
+
+  function handleHrMaxChange(val) {
+    if (val !== undefined) {
+      const hrMax = val !== null ? Math.round(val) : null;
+      updateField('hr_max', hrMax);
+      if (hrMax) {
+        const defaults = calcDefaultZones(hrMax);
+        if (!athlete.hr_z1_max) updateField('hr_z1_max', defaults.hr_z1_max);
+        if (!athlete.hr_z2_max) updateField('hr_z2_max', defaults.hr_z2_max);
+        if (!athlete.hr_z3_max) updateField('hr_z3_max', defaults.hr_z3_max);
+        if (!athlete.hr_z4_max) updateField('hr_z4_max', defaults.hr_z4_max);
+      }
+    }
+  }
+
+  // Auto-calculate hr_max from age on first load if not set
+  useEffect(() => {
+    if (athlete && athlete.age && !athlete.hr_max) {
+      const estimated = 220 - athlete.age;
+      handleHrMaxChange(estimated);
+    }
+  }, [athlete?.age, athlete?.hr_max]);
 
   async function loadProfile() {
     try {
@@ -308,6 +331,16 @@ export default function MyProfilePage() {
             </SectionPanel>
           );
         })}
+
+        {/* HR Zones Section (separate from onboarding) */}
+        <HrZonesSection
+          athlete={athlete}
+          updateField={updateField}
+          expanded={expandedSection === 'hr_zones'}
+          onToggle={() => setExpandedSection(expandedSection === 'hr_zones' ? null : 'hr_zones')}
+          onHrMaxChange={handleHrMaxChange}
+          calcDefaultZones={calcDefaultZones}
+        />
       </div>
     </div>
   );
@@ -919,6 +952,141 @@ function CurrentTrainingFields({ athlete, updateJsonbField }) {
           />
         </div>
       </div>
+    </div>
+  );
+}
+
+function HrZonesSection({ athlete, updateField, expanded, onToggle, onHrMaxChange, calcDefaultZones }) {
+  const hrMax = athlete.hr_max;
+  const defaults = calcDefaultZones(hrMax);
+  const estimatedMax = athlete.age ? 220 - athlete.age : null;
+
+  function zoneRange(zoneMin, zoneMax) {
+    if (!zoneMin && !zoneMax) return '--';
+    return `${zoneMin || '?'}-${zoneMax || '?'} bpm`;
+  }
+
+  return (
+    <div className={`border ${expanded ? 'border-volt' : 'border-ash'} transition-colors`}>
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between p-4 hover:bg-steel transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          {hrMax ? (
+            <CheckCircle size={16} className="text-volt" />
+          ) : (
+            <Circle size={16} className="text-smoke" />
+          )}
+          <Heart size={16} className="text-red-400" />
+          <div className="text-left">
+            <p className="font-display text-base">HEART RATE ZONES</p>
+            <p className="text-smoke text-xs uppercase tracking-wider">HR-based training</p>
+          </div>
+        </div>
+        <ChevronDown
+          size={16}
+          className={`text-smoke transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {expanded && (
+        <div className="p-6 border-t border-ash bg-steel">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            <div>
+              <FieldLabel>Max HR (bpm)</FieldLabel>
+              <NumericInput
+                type="number"
+                className="input-field"
+                placeholder={estimatedMax ? `Auto: ${estimatedMax}` : 'e.g. 190'}
+                value={athlete.hr_max}
+                onChange={onHrMaxChange}
+              />
+              {estimatedMax && !athlete.hr_max && (
+                <p className="text-smoke text-xs mt-1">Estimated from age: {estimatedMax} bpm (220 - {athlete.age})</p>
+              )}
+            </div>
+            <div>
+              <FieldLabel>Resting HR (bpm)</FieldLabel>
+              <NumericInput
+                type="number"
+                className="input-field"
+                placeholder="e.g. 55"
+                value={athlete.hr_resting}
+                onChange={val => { if (val !== undefined) updateField('hr_resting', val !== null ? Math.round(val) : null); }}
+              />
+            </div>
+          </div>
+
+          {hrMax && (
+            <>
+              <p className="text-smoke text-xs uppercase tracking-wider mb-3">Zone Thresholds (upper limit bpm — editable)</p>
+              <div className="space-y-3">
+                <ZoneRow
+                  zone="Z1" label="Recovery" color="text-blue-400" percent="<50%"
+                  range={`<${athlete.hr_z1_max || defaults.hr_z1_max} bpm`}
+                  value={athlete.hr_z1_max || defaults.hr_z1_max}
+                  onChange={val => { if (val !== undefined) updateField('hr_z1_max', val !== null ? Math.round(val) : null); }}
+                />
+                <ZoneRow
+                  zone="Z2" label="Easy" color="text-green-400" percent="50-75%"
+                  range={zoneRange(athlete.hr_z1_max || defaults.hr_z1_max, athlete.hr_z2_max || defaults.hr_z2_max)}
+                  value={athlete.hr_z2_max || defaults.hr_z2_max}
+                  onChange={val => { if (val !== undefined) updateField('hr_z2_max', val !== null ? Math.round(val) : null); }}
+                />
+                <ZoneRow
+                  zone="Z3" label="Tempo" color="text-yellow-400" percent="75-85%"
+                  range={zoneRange(athlete.hr_z2_max || defaults.hr_z2_max, athlete.hr_z3_max || defaults.hr_z3_max)}
+                  value={athlete.hr_z3_max || defaults.hr_z3_max}
+                  onChange={val => { if (val !== undefined) updateField('hr_z3_max', val !== null ? Math.round(val) : null); }}
+                />
+                <ZoneRow
+                  zone="Z4" label="Threshold" color="text-orange-400" percent="85-92%"
+                  range={zoneRange(athlete.hr_z3_max || defaults.hr_z3_max, athlete.hr_z4_max || defaults.hr_z4_max)}
+                  value={athlete.hr_z4_max || defaults.hr_z4_max}
+                  onChange={val => { if (val !== undefined) updateField('hr_z4_max', val !== null ? Math.round(val) : null); }}
+                />
+                <div className="flex items-center gap-3 px-3 py-2 border border-ash bg-carbon">
+                  <span className="text-red-400 font-bold text-xs w-8">Z5</span>
+                  <span className="text-xs text-smoke w-20">VO2max</span>
+                  <span className="text-xs text-smoke w-16">&gt;92%</span>
+                  <span className="text-xs text-white flex-1">&gt;{athlete.hr_z4_max || defaults.hr_z4_max} bpm</span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  const d = calcDefaultZones(hrMax);
+                  updateField('hr_z1_max', d.hr_z1_max);
+                  updateField('hr_z2_max', d.hr_z2_max);
+                  updateField('hr_z3_max', d.hr_z3_max);
+                  updateField('hr_z4_max', d.hr_z4_max);
+                }}
+                className="btn-ghost text-xs mt-4 flex items-center gap-2"
+              >
+                <RefreshCw size={12} />
+                RESET TO DEFAULTS
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ZoneRow({ zone, label, color, percent, range, value, onChange }) {
+  return (
+    <div className="flex items-center gap-3 px-3 py-2 border border-ash bg-carbon">
+      <span className={`${color} font-bold text-xs w-8`}>{zone}</span>
+      <span className="text-xs text-smoke w-20">{label}</span>
+      <span className="text-xs text-smoke w-16">{percent}</span>
+      <span className="text-xs text-white flex-1">{range}</span>
+      <NumericInput
+        type="number"
+        className="input-field w-20 text-center text-xs"
+        value={value}
+        onChange={onChange}
+      />
     </div>
   );
 }

@@ -72,10 +72,10 @@ strengthRoutes.patch('/:id', async (req, res, next) => {
   try {
     const body = req.body;
     const updates = {
+      activity_type: body.activity_type,
       session_date: body.session_date,
       duration_minutes: body.duration_minutes,
       intensity: body.intensity,
-      activity_type: body.activity_type,
       distance_km: body.distance_km ?? null,
       avg_pace_sec: body.avg_pace_sec ?? null,
       avg_hr: body.avg_hr ?? null,
@@ -92,6 +92,7 @@ strengthRoutes.patch('/:id', async (req, res, next) => {
       .single();
 
     if (error) throw error;
+    if (!data) return res.status(404).json({ message: 'Session not found' });
     res.json(data);
   } catch (err) {
     next(err);

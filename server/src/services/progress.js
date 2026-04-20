@@ -4,6 +4,20 @@
 
 function round1(n) { return Math.round(n * 10) / 10; }
 
+/**
+ * Deduplicate workouts by (workout_date, workout_type).
+ * When both 'completed' and 'planned' exist for the same slot, keep 'completed'.
+ * This prevents double-counting when archived/draft plan copies leave stale rows.
+ */
+function deduplicateByDateType(workouts) {
+  const map = new Map();
+  for (const wo of workouts) {
+    const key = `${wo.workout_date}:${wo.workout_type}`;
+    if (!map.has(key) || wo.status === 'completed') map.set(key, wo);
+  }
+  return Array.from(map.values());
+}
+
 /** Format date as YYYY-MM-DD in LOCAL timezone (not UTC) */
 function toDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -82,21 +96,26 @@ export async function getAthleteProgress(supabase, athleteId) {
     const weekWorkouts = workouts.filter(wo =>
       wo.workout_date >= monStr && wo.workout_date <= sunStr
     );
+    // One row per (date, type): prefer 'completed' over 'planned'
+    const weekWorkoutsDeduped = deduplicateByDateType(weekWorkouts);
 
     // Find matching plan week by start_date
     const planWeek = (weeks || []).find(pw => pw.start_date === monStr);
 
-    const planned = weekWorkouts.filter(wo => wo.workout_type !== 'rest');
+    const planned = weekWorkoutsDeduped.filter(wo => wo.workout_type !== 'rest');
     const completed = planned.filter(wo => wo.status === 'completed');
 
+    // Use raw (non-deduped) week workouts so unplanned completed sessions are included
     const completedKm = weekWorkouts
       .filter(wo => wo.status === 'completed')
       .reduce((s, wo) => s + parseFloat(wo.actual_distance_km || wo.distance_km || 0), 0);
 
-    const plannedKm = planWeek ? parseFloat(planWeek.km_target || 0) : weekWorkouts.reduce((s, wo) => s + parseFloat(wo.distance_km || 0), 0);
+    const plannedKm = planWeek
+      ? parseFloat(planWeek.km_target || 0)
+      : weekWorkoutsDeduped.reduce((s, wo) => s + parseFloat(wo.distance_km || 0), 0);
 
     // Easy pace average (only completed easy runs with actual pace)
-    const easyRuns = weekWorkouts.filter(wo =>
+    const easyRuns = weekWorkoutsDeduped.filter(wo =>
       wo.workout_type === 'easy' && wo.status === 'completed' && wo.actual_avg_pace > 0
     );
     const avgEasyPace = easyRuns.length > 0
@@ -129,12 +148,14 @@ export async function getAthleteProgress(supabase, athleteId) {
   }
 
   // --- ACWR line: rolling 7d acute / 28d chronic for each week endpoint ---
+  // Deduplicate once across the full window to avoid double-counting stale rows
+  const workoutsDeduped = deduplicateByDateType(workouts);
   for (let i = 0; i < weekBuckets.length; i++) {
     const weekEnd = new Date(thisMonday);
     weekEnd.setDate(thisMonday.getDate() - (7 - i) * 7 + 6);
     const weekEndStr = toDateStr(weekEnd);
 
-    const acute7 = workouts
+    const acute7 = workoutsDeduped
       .filter(wo => {
         const d = new Date(wo.workout_date);
         const diff = (weekEnd - d) / 86400000;
@@ -142,7 +163,7 @@ export async function getAthleteProgress(supabase, athleteId) {
       })
       .reduce((s, wo) => s + parseFloat(wo.actual_distance_km || wo.distance_km || 0), 0);
 
-    const chronic28 = workouts
+    const chronic28 = workoutsDeduped
       .filter(wo => {
         const d = new Date(wo.workout_date);
         const diff = (weekEnd - d) / 86400000;
@@ -157,7 +178,7 @@ export async function getAthleteProgress(supabase, athleteId) {
 
   // --- Adherence ---
   const thisWeekBucket = weekBuckets[weekBuckets.length - 1];
-  const allTimePlanned = workouts.filter(wo => wo.workout_type !== 'rest');
+  const allTimePlanned = workoutsDeduped.filter(wo => wo.workout_type !== 'rest');
   const allTimeCompleted = allTimePlanned.filter(wo => wo.status === 'completed');
 
   // Streak: consecutive weeks ending at current week where adherence > 80%

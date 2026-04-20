@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { formatPace } from '../utils/vdot.js';
+import { buildHrZonesBlock } from '../utils/hrZones.js';
 
 let _anthropic;
 function getAnthropic() {
@@ -394,6 +395,9 @@ export async function generateWeeklyDetail(athlete, profile, weekContext, monito
   const trainingDays = athlete.available_days?.length || 4;
   const unavailableDays = getUnavailableDays(athlete.available_days);
 
+  // Training method (pace / hr / rpe)
+  const trainingMethod = weekContext.trainingMethod || 'pace';
+
   // Build pace strings
   const paces = {
     easy: `${formatPaceMinKm(athlete.pace_easy_min)} - ${formatPaceMinKm(athlete.pace_easy_max)}`,
@@ -403,6 +407,18 @@ export async function generateWeeklyDetail(athlete, profile, weekContext, monito
     racePace: formatPaceMinKm(athlete.pace_race),
     recovery: formatPaceMinKm((athlete.pace_easy_max || 0) + 30),
   };
+
+  // Build HR zone strings if athlete has HR zones set
+  const hrZonesBlock = buildHrZonesBlock(athlete);
+
+  const hrTrainingNote = trainingMethod === 'hr' ? `
+=== TRAINING METHOD: HEART RATE BASED ===
+For all easy, recovery, and long_run workouts:
+- The PRIMARY target is HR zone, NOT pace
+- Set hr_zone to "Z2" for easy/long runs, "Z1" for recovery
+- In the description, lead with: "Keep HR between [Z2 min]-[Z2 max] bpm. If HR exceeds [max], slow down or walk until it drops back. Ignore pace."
+- Show pace as secondary reference only
+- Coach notes should reinforce: "HR is the boss today, not pace"` : '';
 
   // Build previous week data block
   const prevWeek = previousWeeksSummary?.length > 0
@@ -432,11 +448,14 @@ Training days available: ${trainingDays} days/week (preferred days: ${athlete.av
 Goal: ${athlete.goal_race} -- ${goalTimeStr} half marathon
 Injuries/limitations: ${athlete.injuries || 'None'}
 
+${hrZonesBlock}
+${hrTrainingNote}
+
 === ATHLETE TRAINING PACES (Bogota altitude-adjusted, already +15 sec/km on threshold+) ===
-Easy (E) pace: ${paces.easy} min/km  [HR: 65-79% max, fully conversational]
+Easy (E) pace: ${paces.easy} min/km  [HR Zone 2: Z1 ceiling to Z2 ceiling, fully conversational]
 Marathon (M) pace: ${paces.marathon} min/km
-Threshold (T) pace: ${paces.threshold} min/km  [HR: 88-92% max, comfortably hard]
-Interval (I) pace: ${paces.interval} min/km  [HR: 98-100% max, very hard]
+Threshold (T) pace: ${paces.threshold} min/km  [HR Zone 4: Z3 ceiling to Z4 ceiling, comfortably hard]
+Interval (I) pace: ${paces.interval} min/km  [HR Zone 5: above Z4 ceiling, very hard]
 Race pace (HM goal): ${paces.racePace} min/km
 Recovery pace: ${paces.recovery} min/km  [30 sec/km slower than easy]
 
@@ -492,7 +511,7 @@ RECOVERY WEEK (any phase marked _recovery):
 
 **WORKOUT TYPE TEMPLATES:**
 
-Easy Run: "[X] km at easy pace (${paces.easy} min/km). Fully conversational. HR 65-79% max. Include 5 min walk warm-up and cool-down."
+Easy Run: "[X] km at easy pace (${paces.easy} min/km). Fully conversational. Keep HR in Zone 2. Include 5 min walk warm-up and cool-down."
 
 Recovery Run: "[X] km at recovery pace (${paces.recovery} min/km). Very easy. 20-35 min max. For active recovery only."
 
