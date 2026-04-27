@@ -36,7 +36,7 @@ intervalsRoutes.post('/connect/:athleteId', async (req, res, next) => {
 
     const profile = await fetchIntervalsAthleteProfile(api_key, icuAthleteId);
     if (!profile) {
-      return res.status(400).json({ message: 'Could not connect. Please check your credentials' });
+      return res.status(400).json({ message: 'Could not connect — check your credentials' });
     }
 
     const { error } = await req.supabase

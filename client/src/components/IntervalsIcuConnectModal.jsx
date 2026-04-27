@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
-import { X, ExternalLink, Loader, Check, AlertCircle } from 'lucide-react';
+import { X, ExternalLink, Loader, Check, AlertCircle, Code2 } from 'lucide-react';
 
-const SETTINGS_URL = 'https://intervals.icu/settings/api';
+const SETTINGS_URL = 'https://intervals.icu/settings';
 
 export default function IntervalsIcuConnectModal({ athleteId, onClose, onConnected }) {
   const [icuAthleteId, setIcuAthleteId] = useState('');
@@ -28,7 +28,7 @@ export default function IntervalsIcuConnectModal({ athleteId, onClose, onConnect
         api_key: trimmedKey,
       });
     } catch (err) {
-      setError(err.message || 'Could not connect. Please check your credentials');
+      setError(err.message || 'Could not connect — check your credentials');
     } finally {
       setVerifying(false);
     }
@@ -44,9 +44,9 @@ export default function IntervalsIcuConnectModal({ athleteId, onClose, onConnect
           </button>
         </div>
 
-        <Step number={1} title="Open Intervals.icu Settings">
+        <Step number={1} title="Go to Intervals.icu Settings">
           <p className="text-smoke text-sm mb-3">
-            Create a free account if you don't have one, then open the API settings page.
+            Create a free account if you don't have one, then open Settings.
           </p>
           <a
             href={SETTINGS_URL}
@@ -54,19 +54,27 @@ export default function IntervalsIcuConnectModal({ athleteId, onClose, onConnect
             rel="noopener noreferrer"
             className="btn-secondary inline-flex items-center gap-2 no-underline"
           >
-            <ExternalLink size={14} /> Open intervals.icu/settings/api
+            <ExternalLink size={14} /> Open Intervals.icu Settings
           </a>
         </Step>
 
-        <Step number={2} title="Copy your Athlete ID">
+        <Step number={2} title="Find Developer Settings">
+          <p className="text-smoke text-sm mb-2">
+            Scroll to the bottom of the Settings page until you see the{' '}
+            <span className="text-white font-semibold">Developer Settings</span> section
+            (it has a code icon
+            <Code2 size={14} className="inline-block mx-1 -mt-0.5 text-white" />
+            ).
+          </p>
           <p className="text-smoke text-sm mb-3">
-            Your Athlete ID starts with <span className="text-white font-mono">i</span> and appears
-            at the top of the Settings page (e.g. <span className="text-white font-mono">i12345</span>).
+            You'll see your Athlete ID there — it starts with the letter{' '}
+            <span className="text-white font-mono">i</span> (example:{' '}
+            <span className="text-white font-mono">i557125</span>).
           </p>
           <input
             type="text"
             className="input-field font-mono"
-            placeholder="Paste Athlete ID here"
+            placeholder="Paste your Athlete ID here"
             value={icuAthleteId}
             onChange={e => setIcuAthleteId(e.target.value)}
             spellCheck={false}
@@ -75,15 +83,17 @@ export default function IntervalsIcuConnectModal({ athleteId, onClose, onConnect
           />
         </Step>
 
-        <Step number={3} title="Create an API Key">
-          <p className="text-smoke text-sm mb-3">
-            In the API Keys section, click <span className="text-white font-semibold">Create API Key</span>,
-            give it any name, and copy it.
+        <Step number={3} title="Generate your API Key">
+          <p className="text-smoke text-sm mb-2">
+            Next to the API Key, click{' '}
+            <span className="text-white font-semibold">(view)</span> and then click{' '}
+            <span className="text-white font-semibold">Generate API Key</span>.
           </p>
+          <p className="text-smoke text-sm mb-3">Copy the key that appears.</p>
           <input
             type="text"
             className="input-field font-mono"
-            placeholder="Paste API Key here"
+            placeholder="Paste your API Key here"
             value={apiKey}
             onChange={e => setApiKey(e.target.value)}
             spellCheck={false}
@@ -92,7 +102,7 @@ export default function IntervalsIcuConnectModal({ athleteId, onClose, onConnect
           />
         </Step>
 
-        <Step number={4} title="Verify & Connect" last>
+        <Step number={4} title="Connect" last>
           <p className="text-smoke text-sm mb-3">
             We'll make a test call to Intervals.icu to confirm your credentials before saving.
           </p>
