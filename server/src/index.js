@@ -23,6 +23,7 @@ import { weeklySummaryRoutes } from './routes/weeklySummary.js';
 import { authMiddleware } from './middleware/auth.js';
 import { getAllAthletesSummary } from './services/weeklySummary.js';
 import { sendWeeklySummaryEmail } from './routes/email.js';
+import { syncIntervalsIcuActivities } from './services/intervalsSync.js';
 import cron from 'node-cron';
 
 const app = express();
@@ -87,5 +88,35 @@ cron.schedule('0 21 * * 0', async () => {
     console.log(`[CRON] Weekly summary sent for ${summaries.length} athletes`);
   } catch (err) {
     console.error('[CRON] Weekly summary failed:', err.message);
+  }
+}, { timezone: 'UTC' });
+
+// Daily Intervals.icu auto-sync: 13:00 UTC = 8:00 AM Bogotá (UTC-5)
+cron.schedule('0 13 * * *', async () => {
+  console.log('[CRON] Running Intervals.icu auto-sync...');
+  try {
+    const supabase = (await import('@supabase/supabase-js')).createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_KEY
+    );
+    const { data: athletes } = await supabase
+      .from('athletes')
+      .select('id, name')
+      .not('intervals_icu_api_key', 'is', null)
+      .not('intervals_icu_athlete_id', 'is', null);
+
+    let totalSynced = 0;
+    for (const athlete of athletes || []) {
+      try {
+        const result = await syncIntervalsIcuActivities(supabase, athlete.id, { daysBack: 7 });
+        totalSynced += result.synced;
+        console.log(`[CRON] ${athlete.name || athlete.id}: synced ${result.synced}/${result.fetched}`);
+      } catch (err) {
+        console.error(`[CRON] ${athlete.name || athlete.id}: ${err.message}`);
+      }
+    }
+    console.log(`[CRON] Intervals.icu auto-sync done: ${totalSynced} workouts updated across ${athletes?.length || 0} athletes`);
+  } catch (err) {
+    console.error('[CRON] Intervals.icu auto-sync failed:', err.message);
   }
 }, { timezone: 'UTC' });

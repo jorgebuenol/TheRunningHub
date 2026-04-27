@@ -80,6 +80,7 @@ export const api = {
   // Intervals.icu
   syncToIntervals: (athleteId, planId) => request(`/api/intervals/push/${athleteId}/${planId}`, { method: 'POST' }),
   pullFromIntervals: (athleteId) => request(`/api/intervals/pull/${athleteId}`, { method: 'POST' }),
+  intervalsSync: (athleteId) => request(`/api/intervals/sync/${athleteId}`),
 
   // Dashboard
   getDashboard: () => request('/api/dashboard'),

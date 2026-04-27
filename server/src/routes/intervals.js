@@ -1,9 +1,24 @@
 import { Router } from 'express';
 import { coachOnly } from '../middleware/auth.js';
+import { syncIntervalsIcuActivities } from '../services/intervalsSync.js';
 
 export const intervalsRoutes = Router();
 
 const INTERVALS_BASE = process.env.INTERVALS_ICU_BASE_URL || 'https://intervals.icu/api/v1';
+
+/**
+ * Pull last 7 days of Intervals.icu activities and write actuals onto the
+ * matching plan workouts. Athlete-or-coach can trigger.
+ */
+intervalsRoutes.get('/sync/:athleteId', async (req, res, next) => {
+  try {
+    const result = await syncIntervalsIcuActivities(req.supabase, req.params.athleteId, { daysBack: 7 });
+    res.json(result);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ message: err.message });
+    next(err);
+  }
+});
 
 /**
  * Push workouts from a plan to Intervals.icu calendar

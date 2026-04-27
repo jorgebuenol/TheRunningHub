@@ -1094,7 +1094,25 @@ function ZoneRow({ zone, label, color, percent, range, value, onChange }) {
 function TechnologyFields({ athlete, updateField }) {
   const [stravaLoading, setStravaLoading] = useState(false);
   const [stravaMsg, setStravaMsg] = useState('');
+  const [intervalsSyncing, setIntervalsSyncing] = useState(false);
+  const [intervalsMsg, setIntervalsMsg] = useState('');
   const isStravaConnected = !!athlete.strava_athlete_id;
+  const isIntervalsConnected = !!(athlete.intervals_icu_api_key && athlete.intervals_icu_athlete_id);
+
+  async function handleIntervalsSync() {
+    setIntervalsSyncing(true);
+    setIntervalsMsg('');
+    try {
+      const result = await api.intervalsSync(athlete.id);
+      setIntervalsMsg(`Synced ${result.synced} of ${result.fetched} activities`);
+      setTimeout(() => setIntervalsMsg(''), 5000);
+    } catch (err) {
+      setIntervalsMsg(err.message || 'Sync failed');
+      setTimeout(() => setIntervalsMsg(''), 5000);
+    } finally {
+      setIntervalsSyncing(false);
+    }
+  }
 
   // Check URL for strava=connected on mount
   useEffect(() => {
@@ -1178,25 +1196,49 @@ function TechnologyFields({ athlete, updateField }) {
           onChange={val => updateField('gps_watch_model', val)}
         />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <FieldLabel>Intervals.icu API Key</FieldLabel>
-          <StableTextInput
-            className="input-field"
-            placeholder="Optional"
-            value={athlete.intervals_icu_api_key}
-            onChange={val => updateField('intervals_icu_api_key', val)}
-          />
+      <div>
+        <FieldLabel>Intervals.icu</FieldLabel>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-1">
+          <div>
+            <p className="text-smoke text-[10px] uppercase tracking-wider mb-1">API Key</p>
+            <StableTextInput
+              className="input-field"
+              placeholder="Your API key"
+              value={athlete.intervals_icu_api_key}
+              onChange={val => updateField('intervals_icu_api_key', val)}
+            />
+          </div>
+          <div>
+            <p className="text-smoke text-[10px] uppercase tracking-wider mb-1">Athlete ID</p>
+            <StableTextInput
+              className="input-field"
+              placeholder="i12345"
+              value={athlete.intervals_icu_athlete_id}
+              onChange={val => updateField('intervals_icu_athlete_id', val)}
+            />
+          </div>
         </div>
-        <div>
-          <FieldLabel>Intervals.icu Athlete ID</FieldLabel>
-          <StableTextInput
-            className="input-field"
-            placeholder="Optional"
-            value={athlete.intervals_icu_athlete_id}
-            onChange={val => updateField('intervals_icu_athlete_id', val)}
-          />
-        </div>
+        {isIntervalsConnected && (
+          <div className="flex items-center gap-3 mt-3">
+            <span className="flex items-center gap-2 text-sm text-green-400 font-semibold">
+              <Check size={16} /> Intervals.icu Connected
+            </span>
+            <button
+              type="button"
+              onClick={handleIntervalsSync}
+              disabled={intervalsSyncing}
+              className="px-3 py-1.5 border border-cyan-500 text-cyan-400 hover:bg-cyan-500/20 text-xs uppercase font-bold tracking-wider flex items-center gap-1 transition-colors"
+            >
+              {intervalsSyncing ? <Loader size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+              Sync Now
+            </button>
+          </div>
+        )}
+        {intervalsMsg && (
+          <p className={`text-xs mt-2 ${intervalsMsg.includes('Synced') ? 'text-green-400' : 'text-red-400'}`}>
+            {intervalsMsg}
+          </p>
+        )}
       </div>
       <p className="text-smoke text-xs">All fields in this section are optional.</p>
     </div>

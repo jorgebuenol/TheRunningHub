@@ -91,6 +91,8 @@ export default function CalendarPage() {
   const [rescheduleWorkout, setRescheduleWorkout] = useState(null);
   const [stravaSyncing, setStravaSyncing] = useState(false);
   const [stravaMsg, setStravaMsg] = useState('');
+  const [intervalsSyncing, setIntervalsSyncing] = useState(false);
+  const [intervalsMsg, setIntervalsMsg] = useState('');
 
   /* ─── Data loading ─── */
   useEffect(() => { loadData(); }, [paramAthleteId]);
@@ -415,10 +417,39 @@ export default function CalendarPage() {
               Sync Strava
             </button>
           )}
+          {athlete?.intervals_icu_athlete_id && (
+            <button
+              onClick={async () => {
+                setIntervalsSyncing(true);
+                setIntervalsMsg('');
+                try {
+                  const result = await api.intervalsSync(athlete.id);
+                  setIntervalsMsg(`Synced ${result.synced} of ${result.fetched} activities`);
+                  loadData();
+                  setTimeout(() => setIntervalsMsg(''), 4000);
+                } catch (err) {
+                  setIntervalsMsg(err.message || 'Sync failed');
+                  setTimeout(() => setIntervalsMsg(''), 4000);
+                } finally {
+                  setIntervalsSyncing(false);
+                }
+              }}
+              disabled={intervalsSyncing}
+              className="px-3 py-2 border border-cyan-500 text-cyan-400 hover:bg-cyan-500/20 text-xs uppercase font-bold tracking-wider transition-colors flex items-center gap-1 min-h-[44px]"
+            >
+              {intervalsSyncing ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              Sync Intervals.icu
+            </button>
+          )}
         </div>
         {stravaMsg && (
           <div className={`text-xs px-3 py-1 mt-1 ${stravaMsg.includes('Synced') ? 'text-green-400' : 'text-red-400'}`}>
             {stravaMsg}
+          </div>
+        )}
+        {intervalsMsg && (
+          <div className={`text-xs px-3 py-1 mt-1 ${intervalsMsg.includes('Synced') ? 'text-green-400' : 'text-red-400'}`}>
+            {intervalsMsg}
           </div>
         )}
       </div>
