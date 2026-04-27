@@ -2,6 +2,10 @@
  * Athlete monitoring calculations: ACWR, readiness trends, flags
  */
 
+// Only running activity types contribute to weekly run km. Strength, pilates, cycling,
+// swimming, walking, and "other" are excluded even if they carry a distance value.
+const RUNNING_ACTIVITY_TYPES = new Set(['easy_run', 'long_run', 'race']);
+
 /**
  * Deduplicate workouts by (workout_date, workout_type).
  * When both 'completed' and 'planned' exist for the same slot, keep 'completed'.
@@ -29,20 +33,22 @@ export function calculateACWR(workouts) {
   const twentyOneDaysAgo = new Date(now);
   twentyOneDaysAgo.setDate(twentyOneDaysAgo.getDate() - 21);
 
-  // Filter to completed with distance — no dedup needed since planned rows are excluded by status filter
+  // Filter to completed with actual distance. Strict: only actual_distance_km counts —
+  // never fall back to planned distance_km, which would inflate load when actuals
+  // aren't synced and skew ACWR zones.
   const completed = workouts.filter(w =>
-    w.status === 'completed' && parseFloat(w.actual_distance_km || w.distance_km || 0) > 0
+    w.status === 'completed' && w.workout_type !== 'rest' && parseFloat(w.actual_distance_km || 0) > 0
   );
 
   const acuteWorkouts = completed.filter(w =>
     new Date(w.workout_date) >= sevenDaysAgo
   );
-  const acuteKm = acuteWorkouts.reduce((sum, w) => sum + parseFloat(w.actual_distance_km || w.distance_km || 0), 0);
+  const acuteKm = acuteWorkouts.reduce((sum, w) => sum + parseFloat(w.actual_distance_km || 0), 0);
 
   const chronicWorkouts = completed.filter(w =>
     new Date(w.workout_date) >= twentyEightDaysAgo
   );
-  const chronicTotalKm = chronicWorkouts.reduce((sum, w) => sum + parseFloat(w.actual_distance_km || w.distance_km || 0), 0);
+  const chronicTotalKm = chronicWorkouts.reduce((sum, w) => sum + parseFloat(w.actual_distance_km || 0), 0);
   const chronicWeeklyKm = chronicTotalKm / 4;
 
   // Check if athlete has enough training history (>= 3 weeks of data)
@@ -253,17 +259,21 @@ function getWeeklyKmHistory(workouts, loggedActivities = []) {
     const startStr = start.toISOString().split('T')[0];
     const endStr = end.toISOString().split('T')[0];
 
-    // Filter to completed only — no dedup so unplanned sessions are included in km total
+    // Filter to completed only — no dedup so unplanned sessions are included in km total.
+    // Strict: only actual_distance_km counts; never fall back to planned distance_km.
     const weekWorkouts = workouts.filter(wk =>
-      wk.workout_date >= startStr && wk.workout_date <= endStr && wk.status === 'completed'
+      wk.workout_date >= startStr && wk.workout_date <= endStr &&
+      wk.status === 'completed' && wk.workout_type !== 'rest'
     );
 
-    let km = weekWorkouts.reduce((sum, wk) => sum + parseFloat(wk.actual_distance_km || wk.distance_km || 0), 0);
+    let km = weekWorkouts.reduce((sum, wk) => sum + parseFloat(wk.actual_distance_km || 0), 0);
 
-    // Add km from logged activities (strength_sessions with distance)
+    // Add km from logged running activities only. A strength/pilates/cycling/swimming/
+    // walking session must not leak into the run-km total even if it carries a distance.
     const weekActivities = loggedActivities.filter(a =>
       a.session_date >= startStr &&
       a.session_date <= endStr &&
+      RUNNING_ACTIVITY_TYPES.has(a.activity_type) &&
       a.distance_km && parseFloat(a.distance_km) > 0
     );
     km += weekActivities.reduce((sum, a) => sum + parseFloat(a.distance_km), 0);
