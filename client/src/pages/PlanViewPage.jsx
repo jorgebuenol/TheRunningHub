@@ -43,6 +43,16 @@ const PHASE_COLORS = {
   peak_recovery: 'border-rose-300 bg-rose-300',
 };
 
+// Completed km for a generated week — strict actual_distance_km only, never falls
+// back to planned distance_km. The stored week.total_km field represents the
+// plan's generated total (planned), not actual completion, so do not use it here.
+function completedKmForWeek(workouts) {
+  if (!workouts?.length) return 0;
+  return workouts
+    .filter(w => w.workout_type !== 'rest' && w.status === 'completed')
+    .reduce((s, w) => s + parseFloat(w.actual_distance_km || 0), 0);
+}
+
 const INTENSITY_STYLES = {
   easy: 'bg-green-500/20 text-green-400 border-green-500',
   moderate: 'bg-yellow-500/20 text-yellow-400 border-yellow-500',
@@ -623,13 +633,20 @@ export default function PlanViewPage() {
                 </div>
                 <div className="text-right">
                   {week.is_generated ? (
-                    <>
-                      <p className="text-volt font-display text-lg">{week.total_km || 0}KM</p>
-                      {week.km_target && week.km_target !== week.total_km && (
-                        <p className="text-smoke text-xs">Target: {week.km_target}km</p>
-                      )}
-                      <p className="text-smoke text-xs uppercase">Total Volume</p>
-                    </>
+                    (() => {
+                      const completedKm = completedKmForWeek(week.workouts);
+                      const plannedKm = week.total_km || 0;
+                      return (
+                        <>
+                          <p className="text-volt font-display text-lg">{completedKm.toFixed(1)}KM</p>
+                          <p className="text-smoke text-xs">
+                            Planned: {plannedKm}km
+                            {week.km_target && week.km_target !== plannedKm && ` / Target: ${week.km_target}km`}
+                          </p>
+                          <p className="text-smoke text-xs uppercase">Completed</p>
+                        </>
+                      );
+                    })()
                   ) : (
                     <>
                       <p className="text-volt font-display text-lg">{week.km_target || '—'}KM</p>
