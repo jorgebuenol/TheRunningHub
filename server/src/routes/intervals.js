@@ -21,6 +21,109 @@ intervalsRoutes.get('/sync/:athleteId', async (req, res, next) => {
 });
 
 /**
+ * Verify a candidate (api_key, athlete_id) pair against Intervals.icu and,
+ * on success, save them to the athletes table. Returns the athlete name as
+ * reported by Intervals.icu so the UI can confirm the right account was linked.
+ */
+intervalsRoutes.post('/connect/:athleteId', async (req, res, next) => {
+  try {
+    const { athleteId } = req.params;
+    const { api_key, athlete_id: icuAthleteId } = req.body || {};
+
+    if (!api_key || !icuAthleteId) {
+      return res.status(400).json({ message: 'API key and Athlete ID are required' });
+    }
+
+    const profile = await fetchIntervalsAthleteProfile(api_key, icuAthleteId);
+    if (!profile) {
+      return res.status(400).json({ message: 'Could not connect. Please check your credentials' });
+    }
+
+    const { error } = await req.supabase
+      .from('athletes')
+      .update({
+        intervals_icu_api_key: api_key,
+        intervals_icu_athlete_id: icuAthleteId,
+      })
+      .eq('id', athleteId);
+
+    if (error) {
+      console.error('Failed to save Intervals.icu credentials:', error);
+      return res.status(500).json({ message: 'Failed to save credentials' });
+    }
+
+    res.json({ success: true, athlete_name: extractAthleteName(profile, icuAthleteId) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Connection status for the profile UI. Reports whether credentials are stored
+ * and (if so) the live athlete name from Intervals.icu so the UI can render
+ * "Connected ✓ <name>". `valid: false` means stored creds no longer authenticate
+ * — the UI can show a "reconnect" prompt.
+ */
+intervalsRoutes.get('/status/:athleteId', async (req, res, next) => {
+  try {
+    const { data: athlete } = await req.supabase
+      .from('athletes')
+      .select('intervals_icu_api_key, intervals_icu_athlete_id')
+      .eq('id', req.params.athleteId)
+      .single();
+
+    if (!athlete?.intervals_icu_api_key || !athlete?.intervals_icu_athlete_id) {
+      return res.json({ connected: false });
+    }
+
+    const profile = await fetchIntervalsAthleteProfile(
+      athlete.intervals_icu_api_key,
+      athlete.intervals_icu_athlete_id,
+    );
+
+    if (!profile) {
+      return res.json({
+        connected: true,
+        valid: false,
+        athlete_id: athlete.intervals_icu_athlete_id,
+      });
+    }
+
+    res.json({
+      connected: true,
+      valid: true,
+      athlete_id: athlete.intervals_icu_athlete_id,
+      athlete_name: extractAthleteName(profile, athlete.intervals_icu_athlete_id),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+async function fetchIntervalsAthleteProfile(apiKey, icuAthleteId) {
+  const authHeader = 'Basic ' + Buffer.from(`API_KEY:${apiKey}`).toString('base64');
+  try {
+    const r = await fetch(`${INTERVALS_BASE}/athlete/${icuAthleteId}`, {
+      headers: { Authorization: authHeader },
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch (err) {
+    console.error('Intervals.icu profile fetch failed:', err.message);
+    return null;
+  }
+}
+
+function extractAthleteName(profile, fallback) {
+  if (!profile) return fallback;
+  if (profile.name) return profile.name;
+  const first = profile.firstname || profile.first_name;
+  const last = profile.lastname || profile.last_name;
+  if (first || last) return [first, last].filter(Boolean).join(' ');
+  return fallback;
+}
+
+/**
  * Push workouts from a plan to Intervals.icu calendar
  */
 intervalsRoutes.post('/push/:athleteId/:planId', coachOnly, async (req, res, next) => {

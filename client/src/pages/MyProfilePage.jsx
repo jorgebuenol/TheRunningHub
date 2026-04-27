@@ -6,8 +6,9 @@ import { calcDefaultZones } from '@shared/hrZones';
 import {
   ChevronDown, ChevronRight, Check, Circle, CircleDot, CheckCircle,
   User, Activity, Target, Calendar, Heart, Moon, Apple, Briefcase,
-  RefreshCw, Dumbbell, Smartphone, Link2, Unlink, Loader,
+  RefreshCw, Dumbbell, Smartphone, Link2, Unlink, Loader, AlertCircle,
 } from 'lucide-react';
+import IntervalsIcuConnectModal from '../components/IntervalsIcuConnectModal';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const RACES = ['5K', '10K', 'Half Marathon', 'Marathon'];
@@ -1096,8 +1097,25 @@ function TechnologyFields({ athlete, updateField }) {
   const [stravaMsg, setStravaMsg] = useState('');
   const [intervalsSyncing, setIntervalsSyncing] = useState(false);
   const [intervalsMsg, setIntervalsMsg] = useState('');
+  const [showIntervalsModal, setShowIntervalsModal] = useState(false);
+  const [intervalsStatus, setIntervalsStatus] = useState(null); // { connected, valid, athlete_name }
   const isStravaConnected = !!athlete.strava_athlete_id;
   const isIntervalsConnected = !!(athlete.intervals_icu_api_key && athlete.intervals_icu_athlete_id);
+
+  // Resolve the live Intervals.icu account name once credentials are stored. If the
+  // stored credentials no longer authenticate, /status returns valid=false and the
+  // UI surfaces a Reconnect prompt.
+  useEffect(() => {
+    if (!isIntervalsConnected) {
+      setIntervalsStatus(null);
+      return;
+    }
+    let cancelled = false;
+    api.intervalsStatus(athlete.id)
+      .then(s => { if (!cancelled) setIntervalsStatus(s); })
+      .catch(() => { if (!cancelled) setIntervalsStatus({ connected: true, valid: false }); });
+    return () => { cancelled = true; };
+  }, [athlete.id, isIntervalsConnected]);
 
   async function handleIntervalsSync() {
     setIntervalsSyncing(true);
@@ -1112,6 +1130,16 @@ function TechnologyFields({ athlete, updateField }) {
     } finally {
       setIntervalsSyncing(false);
     }
+  }
+
+  function handleIntervalsConnected(result) {
+    // Modal already wrote credentials to the DB. Mirror them into local state so
+    // the UI flips to "connected" without a refetch. updateField will queue a
+    // redundant PATCH but that's idempotent.
+    updateField('intervals_icu_api_key', result?.api_key ?? athlete.intervals_icu_api_key);
+    updateField('intervals_icu_athlete_id', result?.athlete_id ?? athlete.intervals_icu_athlete_id);
+    setIntervalsStatus({ connected: true, valid: true, athlete_name: result?.athlete_name });
+    setShowIntervalsModal(false);
   }
 
   // Check URL for strava=connected on mount
@@ -1198,42 +1226,49 @@ function TechnologyFields({ athlete, updateField }) {
       </div>
       <div>
         <FieldLabel>Intervals.icu</FieldLabel>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-1">
-          <div>
-            <p className="text-smoke text-[10px] uppercase tracking-wider mb-1">API Key</p>
-            <StableTextInput
-              className="input-field"
-              placeholder="Your API key"
-              value={athlete.intervals_icu_api_key}
-              onChange={val => updateField('intervals_icu_api_key', val)}
-            />
-          </div>
-          <div>
-            <p className="text-smoke text-[10px] uppercase tracking-wider mb-1">Athlete ID</p>
-            <StableTextInput
-              className="input-field"
-              placeholder="i12345"
-              value={athlete.intervals_icu_athlete_id}
-              onChange={val => updateField('intervals_icu_athlete_id', val)}
-            />
-          </div>
-        </div>
-        {isIntervalsConnected && (
-          <div className="flex items-center gap-3 mt-3">
-            <span className="flex items-center gap-2 text-sm text-green-400 font-semibold">
-              <Check size={16} /> Intervals.icu Connected
-            </span>
+        <div className="mt-1">
+          {!isIntervalsConnected ? (
             <button
               type="button"
-              onClick={handleIntervalsSync}
-              disabled={intervalsSyncing}
-              className="px-3 py-1.5 border border-cyan-500 text-cyan-400 hover:bg-cyan-500/20 text-xs uppercase font-bold tracking-wider flex items-center gap-1 transition-colors"
+              onClick={() => setShowIntervalsModal(true)}
+              className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2 transition-colors"
             >
-              {intervalsSyncing ? <Loader size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-              Sync Now
+              <Link2 size={14} /> Connect Intervals.icu
             </button>
-          </div>
-        )}
+          ) : intervalsStatus && intervalsStatus.valid === false ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="flex items-center gap-2 text-sm text-red-400 font-semibold">
+                <AlertCircle size={16} /> Connection invalid
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowIntervalsModal(true)}
+                className="px-3 py-1.5 border border-cyan-500 text-cyan-400 hover:bg-cyan-500/20 text-xs uppercase font-bold tracking-wider flex items-center gap-1 transition-colors"
+              >
+                <Link2 size={12} /> Reconnect
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="flex items-center gap-2 text-sm text-green-400 font-semibold">
+                <Check size={16} />
+                Intervals.icu Connected
+                {intervalsStatus?.athlete_name && (
+                  <span className="text-white/80 font-normal">— {intervalsStatus.athlete_name}</span>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={handleIntervalsSync}
+                disabled={intervalsSyncing}
+                className="px-3 py-1.5 border border-cyan-500 text-cyan-400 hover:bg-cyan-500/20 text-xs uppercase font-bold tracking-wider flex items-center gap-1 transition-colors"
+              >
+                {intervalsSyncing ? <Loader size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                Sync Now
+              </button>
+            </div>
+          )}
+        </div>
         {intervalsMsg && (
           <p className={`text-xs mt-2 ${intervalsMsg.includes('Synced') ? 'text-green-400' : 'text-red-400'}`}>
             {intervalsMsg}
@@ -1241,6 +1276,14 @@ function TechnologyFields({ athlete, updateField }) {
         )}
       </div>
       <p className="text-smoke text-xs">All fields in this section are optional.</p>
+
+      {showIntervalsModal && (
+        <IntervalsIcuConnectModal
+          athleteId={athlete.id}
+          onClose={() => setShowIntervalsModal(false)}
+          onConnected={handleIntervalsConnected}
+        />
+      )}
     </div>
   );
 }
