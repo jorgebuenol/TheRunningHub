@@ -188,9 +188,14 @@ export default function CalendarPage() {
   }, [currentDate]);
 
   /* ─── Week summary stats ─── */
+  // Only running activity types contribute to weekly run km. Strength, pilates,
+  // cycling, swimming, walking, etc. are excluded even if they carry a distance.
+  const RUNNING_ACTIVITY_TYPES = new Set(['easy_run', 'long_run', 'race']);
+
   const weekSummary = useMemo(() => {
     let plannedKm = 0, completedKm = 0, plannedMin = 0, completedMin = 0;
     const dates = view === 'week' ? weekDates : [];
+    const debugRows = [];
 
     // For week view, sum from the 7 visible days
     if (view === 'week') {
@@ -202,20 +207,31 @@ export default function CalendarPage() {
           plannedKm += w.distance_km || 0;
           plannedMin += w.duration_minutes || 0;
           if (w.status === 'completed') {
-            // If completed row has no distance, fall back to planned row distance for same type
-            const plannedFallback = dayWorkouts.find(
-              p => p.workout_type === w.workout_type && p.status === 'planned' && p.distance_km > 0
-            );
-            completedKm += parseFloat(w.actual_distance_km || w.distance_km || plannedFallback?.distance_km || 0);
+            // Strict: only actual_distance_km counts as completed km. Never fall
+            // back to planned distance_km — that inflates real running volume.
+            const km = parseFloat(w.actual_distance_km || 0);
+            completedKm += km;
             completedMin += w.actual_duration_minutes || w.duration_minutes || 0;
+            debugRows.push({ src: 'workout', date: key, type: w.workout_type, km, actual: w.actual_distance_km, planned: w.distance_km });
           }
         }
-        // Include km from logged activities (strength_sessions) — shown on calendar but not in plan workouts
+        // Include km from logged running activities only. A strength session with
+        // a stray distance value, or a cycling/walking/swimming session, must not
+        // be counted as run km.
         for (const act of activitiesByDate[key] || []) {
-          if (act.distance_km && parseFloat(act.distance_km) > 0) {
-            completedKm += parseFloat(act.distance_km);
-          }
+          if (!RUNNING_ACTIVITY_TYPES.has(act.activity_type)) continue;
+          const km = parseFloat(act.distance_km || 0);
+          if (km <= 0) continue;
+          completedKm += km;
+          debugRows.push({ src: 'activity', date: key, type: act.activity_type, km });
         }
+      }
+      if (import.meta.env?.DEV) {
+        console.log('[CalendarPage weekSummary]', {
+          weekStart: format(weekDates[0], 'yyyy-MM-dd'),
+          completedKm: +completedKm.toFixed(2),
+          rows: debugRows,
+        });
       }
     }
 
