@@ -133,37 +133,10 @@ function buildIntervalDescription(workout) {
 }
 
 /**
- * Push a single workout. Throws IntervalsPushError on credential / threshold-pace
- * problems and on Intervals.icu API failures so callers can map status codes.
- *
- * Returns { workout_id, icu_event_id }. The workouts row is updated with the
- * event ID and synced_to_intervals_at on success.
+ * Build the ICU event payload and POST it. Caller has already verified athlete
+ * credentials and threshold pace; this just translates one workout row.
  */
-export async function pushWorkoutToIntervals(supabase, workoutId) {
-  const { data: workout, error: wErr } = await supabase
-    .from('workouts')
-    .select('*, athletes!inner(id, intervals_icu_api_key, intervals_icu_athlete_id)')
-    .eq('id', workoutId)
-    .single();
-
-  if (wErr || !workout) throw new IntervalsPushError('Workout not found', 404);
-  if (workout.workout_type === 'rest') {
-    throw new IntervalsPushError('Cannot sync a rest day', 400);
-  }
-
-  const athlete = workout.athletes;
-  if (!athlete?.intervals_icu_api_key || !athlete?.intervals_icu_athlete_id) {
-    throw new IntervalsPushError('Athlete has no Intervals.icu credentials configured', 400);
-  }
-
-  const thresholdPace = await fetchThresholdPace(
-    athlete.intervals_icu_api_key,
-    athlete.intervals_icu_athlete_id,
-  );
-  if (!thresholdPace) {
-    throw new IntervalsPushError(THRESHOLD_PACE_ERROR, 412);
-  }
-
+async function pushOne(supabase, workout, athlete) {
   const payload = {
     category: 'WORKOUT',
     start_date_local: `${workout.workout_date}T00:00:00`,
@@ -203,31 +176,87 @@ export async function pushWorkoutToIntervals(supabase, workoutId) {
       intervals_icu_event_id: eventId,
       synced_to_intervals_at: new Date().toISOString(),
     })
-    .eq('id', workoutId);
+    .eq('id', workout.id);
 
-  return { workout_id: workoutId, icu_event_id: eventId };
+  return { workout_id: workout.id, icu_event_id: eventId };
 }
 
 /**
- * Push every non-rest workout for a plan. Used by the auto-push on approval.
- * Best-effort: returns per-workout results. Callers decide how to surface errors.
+ * Push a single workout. Verifies credentials and threshold pace before posting.
+ * Throws IntervalsPushError on validation / API failures so callers can map status.
+ */
+export async function pushWorkoutToIntervals(supabase, workoutId) {
+  const { data: workout, error: wErr } = await supabase
+    .from('workouts')
+    .select('*, athletes!inner(id, intervals_icu_api_key, intervals_icu_athlete_id)')
+    .eq('id', workoutId)
+    .single();
+
+  if (wErr || !workout) throw new IntervalsPushError('Workout not found', 404);
+  if (workout.workout_type === 'rest') {
+    throw new IntervalsPushError('Cannot sync a rest day', 400);
+  }
+
+  const athlete = workout.athletes;
+  if (!athlete?.intervals_icu_api_key || !athlete?.intervals_icu_athlete_id) {
+    throw new IntervalsPushError('Athlete has no Intervals.icu credentials configured', 400);
+  }
+
+  const thresholdPace = await fetchThresholdPace(
+    athlete.intervals_icu_api_key,
+    athlete.intervals_icu_athlete_id,
+  );
+  if (!thresholdPace) {
+    throw new IntervalsPushError(THRESHOLD_PACE_ERROR, 412);
+  }
+
+  return pushOne(supabase, workout, athlete);
+}
+
+/**
+ * Push every non-rest workout for a plan. Verifies threshold pace once at the
+ * plan level (instead of per-workout) and short-circuits if it's missing —
+ * the coach gets a single clear 412 instead of N identical errors.
+ *
+ * Best-effort across workouts: per-workout failures are returned in `results`.
+ * Throws IntervalsPushError for plan-level failures (no creds, no threshold pace).
  */
 export async function pushPlanWorkouts(supabase, planId) {
+  const { data: athleteRows } = await supabase
+    .from('training_plans')
+    .select('athletes!inner(id, intervals_icu_api_key, intervals_icu_athlete_id)')
+    .eq('id', planId)
+    .single();
+
+  const athlete = athleteRows?.athletes;
+  if (!athlete?.intervals_icu_api_key || !athlete?.intervals_icu_athlete_id) {
+    throw new IntervalsPushError('Athlete has no Intervals.icu credentials configured', 400);
+  }
+
+  const thresholdPace = await fetchThresholdPace(
+    athlete.intervals_icu_api_key,
+    athlete.intervals_icu_athlete_id,
+  );
+  if (!thresholdPace) {
+    throw new IntervalsPushError(THRESHOLD_PACE_ERROR, 412);
+  }
+
   const { data: workouts } = await supabase
     .from('workouts')
-    .select('id, plan_weeks!inner(plan_id)')
+    .select('*, plan_weeks!inner(plan_id)')
     .eq('plan_weeks.plan_id', planId)
-    .neq('workout_type', 'rest');
+    .neq('workout_type', 'rest')
+    .order('workout_date');
 
-  const ids = (workouts || []).map(w => w.id);
   const results = [];
-  for (const id of ids) {
+  for (const w of workouts || []) {
     try {
-      const r = await pushWorkoutToIntervals(supabase, id);
+      const r = await pushOne(supabase, w, athlete);
       results.push({ ...r, status: 'ok' });
     } catch (err) {
-      results.push({ workout_id: id, status: 'error', error: err.message });
+      results.push({ workout_id: w.id, status: 'error', error: err.message });
     }
   }
-  return results;
+  const synced = results.filter(r => r.status === 'ok').length;
+  return { synced, total: results.length, results };
 }

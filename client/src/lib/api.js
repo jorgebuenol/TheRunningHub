@@ -84,6 +84,7 @@ export const api = {
   intervalsConnect: (athleteId, body) => request(`/api/intervals/connect/${athleteId}`, { method: 'POST', body: JSON.stringify(body) }),
   intervalsStatus: (athleteId) => request(`/api/intervals/status/${athleteId}`),
   pushWorkoutToIntervals: (workoutId) => request(`/api/intervals/push-workout/${workoutId}`, { method: 'POST' }),
+  pushPlanToIntervals: (planId) => request(`/api/intervals/push-plan/${planId}`, { method: 'POST', timeout: 120000 }),
 
   // Dashboard
   getDashboard: () => request('/api/dashboard'),

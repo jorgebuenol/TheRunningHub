@@ -468,10 +468,8 @@ planRoutes.post('/:planId/approve', coachOnly, async (req, res, next) => {
     // (e.g. missing threshold pace) are logged but do not fail the approval.
     if (fullPlan?.athletes?.intervals_icu_api_key && fullPlan?.athletes?.intervals_icu_athlete_id) {
       pushPlanWorkouts(req.supabase, planId)
-        .then(results => {
-          const ok = results.filter(r => r.status === 'ok').length;
-          const failed = results.length - ok;
-          console.log(`Plan ${planId} auto-push to Intervals.icu: ${ok} synced, ${failed} failed`);
+        .then(({ synced, total }) => {
+          console.log(`Plan ${planId} auto-push to Intervals.icu: ${synced}/${total} synced`);
         })
         .catch(err => console.error(`Plan ${planId} auto-push failed:`, err.message));
     }

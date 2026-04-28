@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { coachOnly } from '../middleware/auth.js';
 import { syncIntervalsIcuActivities } from '../services/intervalsSync.js';
-import { pushWorkoutToIntervals, IntervalsPushError } from '../services/intervalsPush.js';
+import { pushWorkoutToIntervals, pushPlanWorkouts, IntervalsPushError } from '../services/intervalsPush.js';
 
 export const intervalsRoutes = Router();
 
@@ -133,6 +133,22 @@ intervalsRoutes.post('/push-workout/:workoutId', coachOnly, async (req, res, nex
   try {
     const result = await pushWorkoutToIntervals(req.supabase, req.params.workoutId);
     res.json({ status: 'ok', ...result });
+  } catch (err) {
+    if (err instanceof IntervalsPushError) {
+      return res.status(err.status).json({ message: err.message });
+    }
+    next(err);
+  }
+});
+
+/**
+ * Push every non-rest workout in a plan. Used by the calendar's "Sync Plan to
+ * Garmin" button. Verifies threshold pace once before iterating.
+ */
+intervalsRoutes.post('/push-plan/:planId', coachOnly, async (req, res, next) => {
+  try {
+    const result = await pushPlanWorkouts(req.supabase, req.params.planId);
+    res.json(result);
   } catch (err) {
     if (err instanceof IntervalsPushError) {
       return res.status(err.status).json({ message: err.message });
