@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { coachOnly } from '../middleware/auth.js';
 import { sendPlanPublishedEmail } from './email.js';
+import { pushPlanWorkouts } from '../services/intervalsPush.js';
 import { generateTrainingPlan, generateMacroPlan, generateCouchToRunMacro, generateWeeklyDetail, checkRedFlags, deriveAthleteLevel, intensityFromPhase } from '../services/planGenerator.js';
 import { getAthleteMonitoringSummary } from '../services/monitoring.js';
 import { addDays, startOfWeek } from '../utils/dates.js';
@@ -460,6 +461,19 @@ planRoutes.post('/:planId/approve', coachOnly, async (req, res, next) => {
         athleteName,
         planName: fullPlan?.name,
       });
+    }
+
+    // Auto-push approved workouts to Intervals.icu so they sync to Garmin (non-blocking).
+    // Only attempts if the athlete has Intervals.icu credentials; per-workout failures
+    // (e.g. missing threshold pace) are logged but do not fail the approval.
+    if (fullPlan?.athletes?.intervals_icu_api_key && fullPlan?.athletes?.intervals_icu_athlete_id) {
+      pushPlanWorkouts(req.supabase, planId)
+        .then(results => {
+          const ok = results.filter(r => r.status === 'ok').length;
+          const failed = results.length - ok;
+          console.log(`Plan ${planId} auto-push to Intervals.icu: ${ok} synced, ${failed} failed`);
+        })
+        .catch(err => console.error(`Plan ${planId} auto-push failed:`, err.message));
     }
 
     res.json(fullPlan);

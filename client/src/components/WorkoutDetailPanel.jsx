@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { formatPace, formatTime, normalizeDescriptionPace } from '../lib/vdot';
 import { calcDefaultZones } from '@shared/hrZones';
-import { X, Check, Edit3, MessageSquare } from 'lucide-react';
+import { X, Check, Edit3, MessageSquare, Loader, AlertCircle, Watch } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 /* ─── Color scheme ─── */
@@ -33,12 +33,32 @@ function safeStr(val) {
 export default function WorkoutDetailPanel({ workout, athlete, isCoach, planStatus, onClose, onEdit, onFeedback }) {
   const colors = getColors(workout.workout_type);
   const [feedback, setFeedback] = useState(null);
+  const [syncedAt, setSyncedAt] = useState(workout.synced_to_intervals_at || null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState('');
 
   useEffect(() => {
     if (workout.id) {
       api.getWorkoutFeedback(workout.id).then(setFeedback).catch(() => {});
     }
+    setSyncedAt(workout.synced_to_intervals_at || null);
+    setSyncError('');
   }, [workout]);
+
+  async function handleSyncToGarmin() {
+    setSyncError('');
+    setSyncing(true);
+    try {
+      await api.pushWorkoutToIntervals(workout.id);
+      setSyncedAt(new Date().toISOString());
+    } catch (err) {
+      setSyncError(err.message || 'Sync failed');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  const canSync = isCoach && workout.workout_type !== 'rest' && workout.status !== 'completed';
 
   const ss = workout.session_structure;
   const hasStructure = ss && ss.warm_up && ss.main_set && ss.cool_down;
@@ -62,6 +82,11 @@ export default function WorkoutDetailPanel({ workout, athlete, isCoach, planStat
               {workout.status === 'skipped' && (
                 <span className="text-xs font-bold uppercase px-2 py-1 bg-red-500/20 text-red-400 border border-red-500">
                   SKIPPED
+                </span>
+              )}
+              {syncedAt && (
+                <span className="text-xs font-bold uppercase px-2 py-1 bg-volt/20 text-volt border border-volt inline-flex items-center gap-1">
+                  <Watch size={10} /> Synced to Garmin <Check size={10} />
                 </span>
               )}
             </div>
@@ -194,6 +219,16 @@ export default function WorkoutDetailPanel({ workout, athlete, isCoach, planStat
               <Edit3 size={14} /> EDIT
             </button>
           )}
+          {canSync && (
+            <button
+              onClick={handleSyncToGarmin}
+              disabled={syncing}
+              className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {syncing ? <Loader size={14} className="animate-spin" /> : <Watch size={14} />}
+              {syncing ? 'SYNCING…' : (syncedAt ? 'RESYNC TO GARMIN' : 'SYNC TO GARMIN')}
+            </button>
+          )}
           {!isCoach && workout.status === 'completed' && !feedback && onFeedback && (
             <button onClick={onFeedback} className="btn-primary flex items-center gap-2 text-sm">
               <MessageSquare size={14} /> LOG FEEDBACK
@@ -213,6 +248,12 @@ export default function WorkoutDetailPanel({ workout, athlete, isCoach, planStat
             CLOSE
           </button>
         </div>
+        {syncError && (
+          <div className="flex items-start gap-2 mt-3 text-red-400 text-sm">
+            <AlertCircle size={14} className="mt-0.5 shrink-0" />
+            <span>{syncError}</span>
+          </div>
+        )}
       </div>
     </div>
   );

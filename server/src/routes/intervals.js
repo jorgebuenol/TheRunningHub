@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { coachOnly } from '../middleware/auth.js';
 import { syncIntervalsIcuActivities } from '../services/intervalsSync.js';
+import { pushWorkoutToIntervals, IntervalsPushError } from '../services/intervalsPush.js';
 
 export const intervalsRoutes = Router();
 
@@ -122,6 +123,23 @@ function extractAthleteName(profile, fallback) {
   if (first || last) return [first, last].filter(Boolean).join(' ');
   return fallback;
 }
+
+/**
+ * Push a single workout to the athlete's Intervals.icu calendar so it syncs to Garmin.
+ * Verifies threshold pace is configured first; if missing, returns 412 with the
+ * exact error string the UI displays.
+ */
+intervalsRoutes.post('/push-workout/:workoutId', coachOnly, async (req, res, next) => {
+  try {
+    const result = await pushWorkoutToIntervals(req.supabase, req.params.workoutId);
+    res.json({ status: 'ok', ...result });
+  } catch (err) {
+    if (err instanceof IntervalsPushError) {
+      return res.status(err.status).json({ message: err.message });
+    }
+    next(err);
+  }
+});
 
 /**
  * Push workouts from a plan to Intervals.icu calendar
