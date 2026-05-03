@@ -26,16 +26,14 @@ const FEELING_OPTIONS = [
 export default function WorkoutFeedbackModal({ workout, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [existingFeedback, setExistingFeedback] = useState(null);
-  const [durationDisplay, setDurationDisplay] = useState(
-    workout?.duration_minutes ? minutesToDisplay(workout.duration_minutes) : ''
-  );
+  const [durationDisplay, setDurationDisplay] = useState('');
   const durationFocused = useRef(false);
 
   const [form, setForm] = useState({
     rpe: 5,
     completed: true,
-    actual_distance_km: workout?.distance_km || '',
-    actual_duration_minutes: workout?.duration_minutes || '',
+    actual_distance_km: '',
+    actual_duration_minutes: '',
     actual_pace_sec_km: '',
     avg_hr: '',
     max_hr: '',
@@ -54,11 +52,11 @@ export default function WorkoutFeedbackModal({ workout, onClose, onSaved }) {
       const fb = await api.getWorkoutFeedback(workout.id);
       if (fb) {
         setExistingFeedback(fb);
-        const durMin = fb.actual_duration_minutes || workout?.duration_minutes || '';
+        const durMin = fb.actual_duration_minutes || '';
         setForm({
           rpe: fb.rpe,
           completed: fb.completed,
-          actual_distance_km: fb.actual_distance_km || workout?.distance_km || '',
+          actual_distance_km: fb.actual_distance_km || '',
           actual_duration_minutes: durMin,
           actual_pace_sec_km: fb.actual_pace_sec_km || '',
           avg_hr: fb.avg_hr || '',
@@ -116,6 +114,14 @@ export default function WorkoutFeedbackModal({ workout, onClose, onSaved }) {
   const durationDelta = form.actual_duration_minutes && workout?.duration_minutes
     ? parseFloat(form.actual_duration_minutes) - workout.duration_minutes
     : null;
+
+  // Require actuals when the athlete marks a planned-distance workout completed.
+  // Without this, blank submits would let the planned values fill in as actuals
+  // via fallback logic, producing fake pace/distance trends.
+  const plannedHasDistance = parseFloat(workout?.distance_km || 0) > 0;
+  const actualsMissing = form.completed && plannedHasDistance &&
+    (!form.actual_distance_km || !form.actual_duration_minutes);
+  const submitDisabled = saving || actualsMissing;
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
@@ -224,6 +230,7 @@ export default function WorkoutFeedbackModal({ workout, onClose, onSaved }) {
                   value={form.actual_distance_km}
                   onChange={e => updateForm('actual_distance_km', e.target.value)}
                   className="input-field"
+                  placeholder={workout?.distance_km ? `Planned ${workout.distance_km}` : ''}
                 />
                 {distanceDelta !== null && (
                   <p className={`text-xs mt-1 ${parseFloat(distanceDelta) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -235,7 +242,7 @@ export default function WorkoutFeedbackModal({ workout, onClose, onSaved }) {
                 <label className="text-smoke text-xs uppercase">Duration</label>
                 <input
                   type="text"
-                  placeholder="H:MM:SS"
+                  placeholder={workout?.duration_minutes ? `Planned ${minutesToDisplay(workout.duration_minutes)}` : 'H:MM:SS'}
                   value={durationDisplay}
                   onFocus={() => { durationFocused.current = true; }}
                   onChange={e => setDurationDisplay(e.target.value)}
@@ -295,8 +302,13 @@ export default function WorkoutFeedbackModal({ workout, onClose, onSaved }) {
           </div>
 
           {/* Actions */}
+          {actualsMissing && (
+            <p className="text-yellow-400 text-xs">
+              Enter your actual distance and duration before saving.
+            </p>
+          )}
           <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving} className="btn-primary flex-1">
+            <button type="submit" disabled={submitDisabled} className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed">
               {saving ? 'SAVING...' : existingFeedback ? 'UPDATE FEEDBACK' : 'SAVE FEEDBACK'}
             </button>
             <button type="button" onClick={onClose} className="btn-ghost">

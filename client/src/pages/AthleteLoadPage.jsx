@@ -197,7 +197,7 @@ export default function AthleteLoadPage() {
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <p className="text-smoke text-sm py-8 text-center">No RPE data yet.</p>
+          <p className="text-smoke text-sm py-8 text-center">No RPE entries in the last 7 days.</p>
         )}
       </div>
 
@@ -252,7 +252,7 @@ export default function AthleteLoadPage() {
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <p className="text-smoke text-sm py-8 text-center">No readiness data yet.</p>
+          <p className="text-smoke text-sm py-8 text-center">No readiness check-ins in the last 7 days.</p>
         )}
       </div>
 
