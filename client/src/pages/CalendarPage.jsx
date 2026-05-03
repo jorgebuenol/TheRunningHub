@@ -93,6 +93,8 @@ export default function CalendarPage() {
   const [stravaMsg, setStravaMsg] = useState('');
   const [intervalsSyncing, setIntervalsSyncing] = useState(false);
   const [intervalsMsg, setIntervalsMsg] = useState('');
+  const [pushingPlan, setPushingPlan] = useState(false);
+  const [pushPlanMsg, setPushPlanMsg] = useState('');
 
   /* ─── Data loading ─── */
   useEffect(() => { loadData(); }, [paramAthleteId]);
@@ -441,6 +443,30 @@ export default function CalendarPage() {
               Sync Intervals.icu
             </button>
           )}
+          {isCoach && plan?.id && athlete?.intervals_icu_athlete_id && (
+            <button
+              onClick={async () => {
+                setPushingPlan(true);
+                setPushPlanMsg('');
+                try {
+                  const result = await api.pushPlanToIntervals(plan.id);
+                  setPushPlanMsg(`Pushed ${result.synced}/${result.total} workouts to Garmin`);
+                  loadData();
+                  setTimeout(() => setPushPlanMsg(''), 6000);
+                } catch (err) {
+                  setPushPlanMsg(err.message || 'Push failed');
+                  setTimeout(() => setPushPlanMsg(''), 8000);
+                } finally {
+                  setPushingPlan(false);
+                }
+              }}
+              disabled={pushingPlan}
+              className="px-3 py-2 border border-volt text-volt hover:bg-volt/20 text-xs uppercase font-bold tracking-wider transition-colors flex items-center gap-1 min-h-[44px]"
+            >
+              {pushingPlan ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              Push Plan to Garmin
+            </button>
+          )}
         </div>
         {stravaMsg && (
           <div className={`text-xs px-3 py-1 mt-1 ${stravaMsg.includes('Synced') ? 'text-green-400' : 'text-red-400'}`}>
@@ -450,6 +476,11 @@ export default function CalendarPage() {
         {intervalsMsg && (
           <div className={`text-xs px-3 py-1 mt-1 ${intervalsMsg.includes('Synced') ? 'text-green-400' : 'text-red-400'}`}>
             {intervalsMsg}
+          </div>
+        )}
+        {pushPlanMsg && (
+          <div className={`text-xs px-3 py-1 mt-1 ${pushPlanMsg.includes('Pushed') ? 'text-green-400' : 'text-red-400'}`}>
+            {pushPlanMsg}
           </div>
         )}
       </div>

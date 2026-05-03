@@ -3,14 +3,16 @@ import { api } from '../lib/api';
 import { X, ExternalLink, Loader, Check, AlertCircle, Code2 } from 'lucide-react';
 
 const SETTINGS_URL = 'https://intervals.icu/settings';
+const PACE_SETTINGS_URL = 'https://intervals.icu/settings/Run';
 
 export default function IntervalsIcuConnectModal({ athleteId, onClose, onConnected }) {
   const [icuAthleteId, setIcuAthleteId] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [thresholdConfirmed, setThresholdConfirmed] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState('');
 
-  const canSubmit = icuAthleteId.trim() && apiKey.trim() && !verifying;
+  const canSubmit = icuAthleteId.trim() && apiKey.trim() && thresholdConfirmed && !verifying;
 
   async function handleConnect() {
     setError('');
@@ -100,6 +102,32 @@ export default function IntervalsIcuConnectModal({ athleteId, onClose, onConnect
             autoCapitalize="off"
             autoCorrect="off"
           />
+        </Step>
+
+        <Step number="3.5" title="Configure your Threshold Pace">
+          <p className="text-smoke text-sm mb-3">
+            In Intervals.icu Settings, click the{' '}
+            <span className="text-white font-semibold">RUN</span> tab and set your{' '}
+            <span className="text-white font-semibold">Threshold Pace</span>. This is required
+            for workouts to sync to your Garmin with pace targets.
+          </p>
+          <a
+            href={PACE_SETTINGS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary inline-flex items-center gap-2 no-underline mb-3"
+          >
+            <ExternalLink size={14} /> Open Pace Settings
+          </a>
+          <label className="flex items-start gap-2 cursor-pointer text-sm text-white">
+            <input
+              type="checkbox"
+              checked={thresholdConfirmed}
+              onChange={e => setThresholdConfirmed(e.target.checked)}
+              className="mt-1 accent-volt"
+            />
+            <span>I've configured my Threshold Pace</span>
+          </label>
         </Step>
 
         <Step number={4} title="Connect" last>
