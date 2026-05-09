@@ -388,7 +388,8 @@ function enforceVolumeRules(weeks, athleteWeeklyKm) {
  * Uses PART 2 of the plan generation methodology document
  * Includes intensity distribution rules, workout templates, adaptation rules
  */
-export async function generateWeeklyDetail(athlete, profile, weekContext, monitoringData, previousWeeksSummary, redFlagWarnings = []) {
+export async function generateWeeklyDetail(athlete, profile, weekContext, monitoringData, previousWeeksSummary, redFlagWarnings = [], options = {}) {
+  const { coach_intent: coachIntent = null, generationContext = null } = options;
   const level = deriveAthleteLevel(athlete.weekly_km).level;
   const vdot = athlete.vdot || 25;
   const goalTimeStr = formatGoalTime(athlete.goal_time_seconds);
@@ -438,6 +439,15 @@ Notes from athlete: ${prevWeek.athlete_notes || 'None'}` : `No previous week dat
     ? '\nRED FLAG OVERRIDES (apply these BEFORE normal generation rules):\n' + redFlagWarnings.map(w => `- ${w}`).join('\n')
     : '';
 
+  // Smart Week Generation blocks — only included when the coach is using the
+  // new modal flow. When both coachIntent and generationContext are null, the
+  // legacy prompt runs unchanged (full backward compat).
+  const coachIntentBlock = buildCoachIntentBlock(coachIntent);
+  const autoContextBlock = buildAutoContextBlock(generationContext);
+  const priorityHierarchyBlock = (coachIntent || generationContext)
+    ? PRIORITY_HIERARCHY_BLOCK
+    : '';
+
   const prompt = `You are an expert running coach for The Run Hub Bogota. Generate a detailed 7-day training week.
 
 === ATHLETE PROFILE ===
@@ -468,6 +478,7 @@ Special notes from coach: ${weekContext.notes || 'None'}
 === PREVIOUS WEEK DATA (for adaptation) ===
 ${prevWeekBlock}
 ${redFlagStr}
+${coachIntentBlock}${autoContextBlock}${priorityHierarchyBlock}
 
 === PLAN GENERATION RULES ===
 
@@ -703,3 +714,114 @@ export function checkRedFlags(monitoringData, previousWeeksSummary, athlete) {
 
   return { forceRecovery, warnings, kmReduction };
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   SMART WEEK GENERATION — coach intent + auto-context blocks
+   Only injected when the coach uses the WeekGenerationModal flow.
+   ═══════════════════════════════════════════════════════════════ */
+
+function buildCoachIntentBlock(coachIntent) {
+  if (!coachIntent) return '';
+  const recovery = coachIntent.is_recovery_week
+    ? 'YES — apply recovery rules regardless of phase'
+    : 'no';
+  const taper = coachIntent.is_taper_week
+    ? 'YES — apply taper rules regardless of phase'
+    : 'no';
+  const maxSessions = coachIntent.max_sessions
+    ? `${coachIntent.max_sessions}`
+    : 'no cap';
+  return `
+=== COACH INTENT (AUTHORITATIVE) ===
+The coach has reviewed this athlete's recent data and provided the following intent for this week.
+Treat coach intent as the PRIMARY directive for week structure (objective, focus, scheduling).
+
+Weekly objective: ${coachIntent.weekly_objective || '—'}
+Specific focus: ${coachIntent.specific_focus || '—'}
+Athlete state (coach's read): ${coachIntent.athlete_state || 'normal'}
+Schedule adjustments: ${coachIntent.adjustments || '—'}
+Recovery week override: ${recovery}
+Taper week override: ${taper}
+Max sessions this week: ${maxSessions}`;
+}
+
+function buildAutoContextBlock(ctx) {
+  if (!ctx) return '';
+  const a = ctx.athlete || {};
+  const p = ctx.previous_week || {};
+  const t = ctx.trend_last_4_weeks || {};
+  const flags = ctx.flags || [];
+  const milestone = ctx.next_milestone;
+
+  const easyPaceLine = p.avg_easy_pace
+    ? `${p.avg_easy_pace} sec/km — ${p.easy_pace_in_target ? 'WITHIN target zone' : 'OUTSIDE target zone'}`
+    : 'no easy runs with valid pace data';
+  const longRunLine = p.long_run_completed
+    ? `completed at ${p.long_run_pace || '?'} sec/km`
+    : (p.long_run_planned ? 'NOT completed (was scheduled)' : 'none scheduled');
+  const rpeLine = p.avg_rpe !== null && p.avg_rpe !== undefined
+    ? `${p.avg_rpe}/10`
+    : 'no feedback logged';
+  const milestoneLine = milestone
+    ? `${milestone.name} on ${milestone.date} (${milestone.weeks_away} weeks away)`
+    : 'none on file';
+  const flagLines = flags.length > 0
+    ? flags.map(f => `- [${f.severity}] ${f.type}: ${f.detail}`).join('\n')
+    : '- none';
+
+  return `
+=== AUTO-CONTEXT (INFORMATIONAL — for adaptation, not authority) ===
+Goal race: ${milestoneLine}
+
+Previous week (W${p.week_number ?? '?'}, phase ${p.phase || '?'}):
+- Volume: ${p.completed_km ?? 0} km of ${p.planned_km ?? 0} km planned (${p.completion_pct ?? 0}%)
+- Sessions: ${p.workouts_completed ?? 0}/${p.workouts_planned ?? 0} done, ${p.workouts_skipped ?? 0} skipped, ${p.workouts_rescheduled ?? 0} rescheduled
+- Quality sessions: ${p.quality_sessions_completed ?? 0}/${p.quality_sessions_planned ?? 0} done
+- Avg RPE: ${rpeLine}
+- Avg easy pace: ${easyPaceLine}
+- Long run: ${longRunLine}
+
+4-week trend (anchored to start of this week):
+- Avg completion: ${t.avg_completion_pct ?? '—'}%
+- ACWR: ${t.acwr ?? '—'} (${t.acwr_status || '—'})
+- RPE trend: ${t.rpe_trend || '—'} (avg ${t.avg_rpe ?? '—'})
+- Easy pace trend: ${t.easy_pace_trend || '—'}
+- Total volume: ${t.total_km ?? '—'} km
+
+Active flags:
+${flagLines}`;
+}
+
+const PRIORITY_HIERARCHY_BLOCK = `
+=== GENERATION RULES — PRIORITY HIERARCHY ===
+
+When coach intent and auto-context conflict, use this strict priority:
+
+LEVEL 1 — Safety overrides (cannot be ignored, even by coach)
+These flags trigger mandatory adjustments regardless of coach intent:
+- pain_reported: NO threshold, intervals, or race_pace work this week. All easy/recovery only. Add coach_notes flagging the pain.
+- acwr_red (>1.5): Reduce volume to 75-85% of previous week. NO net volume increase even if coach said "build."
+- high_rpe AND low_completion together: Treat as overreaching. Recovery-style week regardless of coach intent.
+
+If the coach intent contradicts a Level 1 flag (e.g., flag says pain, coach said "introduce tempo"), generate the safer week AND add a clear coach_notes on Day 1: "Safety override applied: [reason]. Coach should review before approving."
+
+LEVEL 2 — Coach intent (overrides auto-context inference)
+The coach knows context the data doesn't. When no Level 1 flag is active, coach intent wins over data signals:
+- If weekly_objective = "Recovery week" or is_recovery_week=true: Recovery rules apply (75% of peak volume, no quality work, max 1 short tempo).
+- If weekly_objective = "Taper": Reduce volume 30-50%, maintain intensity.
+- If athlete_state = "fatigued" or "recovering": Conservative week, even if data says they could push.
+- If athlete_state = "fresh" and no Level 1 flags: Coach intent volume/intensity wins, even if ACWR is yellow or last week's RPE was high.
+- specific_focus text always carries through to coach_notes on relevant workouts. If coach says "cadence work in easy runs," every easy run gets a coach_note about cadence.
+- adjustments text governs scheduling (which day = long run, which day = rest, etc.) — never override coach scheduling.
+
+LEVEL 3 — Auto-context guidance (default behavior when coach intent is silent)
+When the coach didn't specify, use auto-context to infer:
+- Volume progression: previous_week × 1.05 to 1.10 (cap 1.15) for non-recovery weeks
+- First week of plan: 80-85% of athlete's self-reported weekly_km baseline
+- Post-recovery week: return to previous non-recovery peak, NOT a new peak
+- If easy_pace_too_fast flag: add coach_notes to easy runs reminding athlete to slow down
+- If missed_long_run flag: keep long run at same distance (don't escalate when they couldn't complete prior)
+- Bogotá altitude: paces are already in athlete's profile (Bogotá-adjusted), use them as-is
+
+Tie-breaking
+If coach intent is ambiguous (e.g., specific_focus has conflicting instructions) or auto-context is missing (first week, no prior data): generate a conservative aerobic-base week and add coach_notes on Day 1 explaining the assumptions made.`;

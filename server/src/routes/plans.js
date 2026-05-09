@@ -4,6 +4,7 @@ import { sendPlanPublishedEmail } from './email.js';
 import { pushPlanWorkouts } from '../services/intervalsPush.js';
 import { generateTrainingPlan, generateMacroPlan, generateCouchToRunMacro, generateWeeklyDetail, checkRedFlags, deriveAthleteLevel, intensityFromPhase } from '../services/planGenerator.js';
 import { getAthleteMonitoringSummary } from '../services/monitoring.js';
+import { buildGenerationContext } from '../services/generationContext.js';
 import { addDays, startOfWeek } from '../utils/dates.js';
 import { calcDefaultZones } from '../utils/hrZones.js';
 
@@ -224,12 +225,13 @@ planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
 planRoutes.post('/:planId/weeks/:weekId/generate', coachOnly, async (req, res, next) => {
   try {
     const { planId, weekId } = req.params;
+    const { coach_intent: coachIntent = null, include_auto_context: includeAutoContext = false } = req.body || {};
 
     // 1. Fetch the full plan with athlete data
     const fullPlan = await fetchFullPlan(req.supabase, planId);
     if (!fullPlan) return res.status(404).json({ message: 'Plan not found' });
-    if (fullPlan.status !== 'draft') {
-      return res.status(409).json({ message: 'Can only generate weeks for draft plans' });
+    if (fullPlan.status !== 'draft' && fullPlan.status !== 'approved') {
+      return res.status(409).json({ message: 'Can only generate weeks for draft or approved plans' });
     }
 
     // 2. Find the target week
@@ -242,12 +244,27 @@ planRoutes.post('/:planId/weeks/:weekId/generate', coachOnly, async (req, res, n
     const athlete = fullPlan.athletes;
     if (!athlete) return res.status(404).json({ message: 'Athlete not found' });
 
-    // 3. Fetch monitoring data
+    // 3. Fetch monitoring data (legacy block — still feeds the prevWeek section)
     let monitoringData = null;
     try {
       monitoringData = await getAthleteMonitoringSummary(req.supabase, athlete.id);
     } catch (monErr) {
       console.warn('Could not fetch monitoring data:', monErr.message);
+    }
+
+    // 3b. Build Smart-Generation auto-context when caller opted in
+    let generationContext = null;
+    if (coachIntent || includeAutoContext) {
+      try {
+        generationContext = await buildGenerationContext(req.supabase, {
+          athleteId: athlete.id,
+          plan: fullPlan,
+          targetWeek,
+          planWeeks: fullPlan.plan_weeks || [],
+        });
+      } catch (ctxErr) {
+        console.warn('Could not build generation context:', ctxErr.message);
+      }
     }
 
     // 4. Build previous weeks summary
@@ -296,7 +313,8 @@ planRoutes.post('/:planId/weeks/:weekId/generate', coachOnly, async (req, res, n
         },
         monitoringData,
         previousWeeksSummary,
-        redFlags.warnings
+        redFlags.warnings,
+        { coach_intent: coachIntent, generationContext }
       );
     } catch (aiErr) {
       const msg = aiErr.message || '';
@@ -402,6 +420,10 @@ planRoutes.post('/:planId/weeks/:weekId/generate', coachOnly, async (req, res, n
       weekUpdate.is_recovery = true;
       weekUpdate.intensity = intensityFromPhase(effectiveWeek.phase);
     }
+    // Persist coach intent (audit trail — preloads modal if coach reopens later)
+    if (coachIntent) {
+      weekUpdate.coach_intent = coachIntent;
+    }
 
     const { error: updateErr } = await req.supabase
       .from('plan_weeks')
@@ -413,6 +435,30 @@ planRoutes.post('/:planId/weeks/:weekId/generate', coachOnly, async (req, res, n
     // 9. Return updated full plan
     const updatedPlan = await fetchFullPlan(req.supabase, planId);
     res.status(201).json(updatedPlan);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET auto-context for the Smart Week Generation modal
+planRoutes.get('/:planId/weeks/:weekId/generation-context', coachOnly, async (req, res, next) => {
+  try {
+    const { planId, weekId } = req.params;
+    const fullPlan = await fetchFullPlan(req.supabase, planId);
+    if (!fullPlan) return res.status(404).json({ message: 'Plan not found' });
+    const targetWeek = fullPlan.plan_weeks?.find(w => w.id === weekId);
+    if (!targetWeek) return res.status(404).json({ message: 'Week not found' });
+    if (!targetWeek.start_date) {
+      return res.status(409).json({ message: 'Target week has no start_date — cannot build context' });
+    }
+
+    const context = await buildGenerationContext(req.supabase, {
+      athleteId: fullPlan.athletes.id,
+      plan: fullPlan,
+      targetWeek,
+      planWeeks: fullPlan.plan_weeks || [],
+    });
+    res.json(context);
   } catch (err) {
     next(err);
   }

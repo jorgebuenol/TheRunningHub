@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { formatPace, formatTime, normalizeDescriptionPace } from '../lib/vdot';
+import WeekGenerationModal from '../components/WeekGenerationModal';
 import {
   ArrowLeft, Calendar, Edit3, Save, X, Check,
   Bot, Send, Loader, MessageSquare, ChevronDown, ChevronRight,
@@ -96,8 +97,7 @@ export default function PlanViewPage() {
   const [actionMessage, setActionMessage] = useState('');
 
   // Week generation
-  const [generatingWeek, setGeneratingWeek] = useState(null);
-  const [generateError, setGenerateError] = useState('');
+  const [generationModalWeek, setGenerationModalWeek] = useState(null);
 
   // AI Chat
   const [chatOpen, setChatOpen] = useState(false);
@@ -143,20 +143,6 @@ export default function PlanViewPage() {
       setShowVersions(true);
     } catch (err) {
       console.error(err);
-    }
-  }
-
-  // Generate weekly detail
-  async function handleGenerateWeek(weekId) {
-    setGeneratingWeek(weekId);
-    setGenerateError('');
-    try {
-      const updated = await api.generateWeekDetail(planId, weekId);
-      setPlan(updated);
-    } catch (err) {
-      setGenerateError(err.message);
-    } finally {
-      setGeneratingWeek(null);
     }
   }
 
@@ -536,16 +522,6 @@ export default function PlanViewPage() {
           </div>
         )}
 
-        {/* Generate error */}
-        {generateError && (
-          <div className="border border-red-500 bg-red-900/20 px-4 py-3 mb-4 text-sm text-red-300">
-            {generateError}
-            <button onClick={() => setGenerateError('')} className="ml-3 text-red-400 hover:text-white">
-              <X size={14} className="inline" />
-            </button>
-          </div>
-        )}
-
         {/* Phase legend */}
         <div className="flex flex-wrap gap-3 mb-6">
           {Object.entries(WORKOUT_COLORS).map(([type, cls]) => (
@@ -695,21 +671,11 @@ export default function PlanViewPage() {
 
                   {isCoach && isDraft && (
                     <button
-                      onClick={() => handleGenerateWeek(week.id)}
-                      disabled={generatingWeek !== null}
+                      onClick={() => setGenerationModalWeek(week)}
                       className="btn-primary inline-flex items-center gap-2 mt-2"
                     >
-                      {generatingWeek === week.id ? (
-                        <>
-                          <Loader size={16} className="animate-spin" />
-                          GENERATING...
-                        </>
-                      ) : (
-                        <>
-                          <Zap size={16} />
-                          GENERATE THIS WEEK
-                        </>
-                      )}
+                      <Zap size={16} />
+                      GENERATE THIS WEEK
                     </button>
                   )}
 
@@ -912,6 +878,16 @@ export default function PlanViewPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Smart Week Generation modal */}
+      {generationModalWeek && (
+        <WeekGenerationModal
+          planId={planId}
+          week={generationModalWeek}
+          onClose={() => setGenerationModalWeek(null)}
+          onGenerated={(updated) => setPlan(updated)}
+        />
       )}
 
       {/* Delete confirmation dialog */}
