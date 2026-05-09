@@ -89,7 +89,7 @@ export default function PlanViewPage() {
   const [loading, setLoading] = useState(true);
   const [editingWorkout, setEditingWorkout] = useState(null);
   const [editForm, setEditForm] = useState({});
-  const [expandedWorkout, setExpandedWorkout] = useState(null);
+  const [showAllDetails, setShowAllDetails] = useState(false);
 
   // Status actions
   const [approving, setApproving] = useState(false);
@@ -605,7 +605,6 @@ export default function PlanViewPage() {
 
                     const colorClass = WORKOUT_COLORS[workout.workout_type] || 'border-ash';
                     const isEditing = editingWorkout === workout.id;
-                    const isExpanded = expandedWorkout === workout.id;
 
                     return (
                       <div key={i} className={`border-l-4 border-t border-r border-b border-ash p-3 min-h-[120px] ${colorClass}`}>
@@ -620,39 +619,37 @@ export default function PlanViewPage() {
                           </div>
                         </div>
 
-                        {(
-                          <div
-                            className="cursor-pointer"
-                            onClick={() => setExpandedWorkout(isExpanded ? null : workout.id)}
-                          >
-                            <p className="text-white text-xs font-bold uppercase leading-tight">{safeStr(workout.title)}</p>
-                            {workout.distance_km && (
-                              <p className="text-volt text-xs font-semibold mt-1">{workout.distance_km}km</p>
-                            )}
-                            {workout.pace_range_min && workout.pace_range_max && (
-                              <p className="text-smoke text-xs mt-1">
-                                {formatPace(workout.pace_range_min)}-{formatPace(workout.pace_range_max)}
-                              </p>
-                            )}
-                            {workout.target_type === 'hr' && workout.hr_target_min && workout.hr_target_max ? (
-                              <p className="text-red-400 text-xs font-semibold">HR {workout.hr_target_min}-{workout.hr_target_max} bpm</p>
-                            ) : workout.hr_zone ? (
-                              <p className="text-smoke text-xs">{safeStr(workout.hr_zone)}</p>
-                            ) : null}
-                            {isExpanded && (
-                              <div className="mt-2 pt-2 border-t border-ash/50 space-y-1">
-                                {workout.duration_minutes && <p className="text-smoke text-xs">{formatTime(Math.round(workout.duration_minutes * 60))}</p>}
-                                {workout.description && <p className="text-smoke text-xs">{normalizeDescriptionPace(safeStr(workout.description), workout)}</p>}
-                                {workout.coach_notes && <p className="text-volt/80 text-xs">Coach: {safeStr(workout.coach_notes)}</p>}
-                                {workout.intervals_detail && typeof workout.intervals_detail === 'object' && (
-                                  <p className="text-smoke text-xs">
-                                    {workout.intervals_detail.reps}x{workout.intervals_detail.distance_m}m @ {formatPace(workout.intervals_detail.pace_sec_km)}/km, {workout.intervals_detail.rest_seconds}s rest
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                        <div
+                          className="cursor-pointer"
+                          onClick={() => setShowAllDetails(v => !v)}
+                        >
+                          <p className="text-white text-xs font-bold uppercase leading-tight">{safeStr(workout.title)}</p>
+                          {workout.distance_km && (
+                            <p className="text-volt text-xs font-semibold mt-1">{workout.distance_km}km</p>
+                          )}
+                          {workout.pace_range_min && workout.pace_range_max && (
+                            <p className="text-smoke text-xs mt-1">
+                              {formatPace(workout.pace_range_min)}-{formatPace(workout.pace_range_max)}
+                            </p>
+                          )}
+                          {workout.target_type === 'hr' && workout.hr_target_min && workout.hr_target_max ? (
+                            <p className="text-red-400 text-xs font-semibold">HR {workout.hr_target_min}-{workout.hr_target_max} bpm</p>
+                          ) : workout.hr_zone ? (
+                            <p className="text-smoke text-xs">{safeStr(workout.hr_zone)}</p>
+                          ) : null}
+                          {showAllDetails && (
+                            <div className="mt-2 pt-2 border-t border-ash/50 space-y-1">
+                              {workout.duration_minutes && <p className="text-smoke text-xs">{formatTime(Math.round(workout.duration_minutes * 60))}</p>}
+                              {workout.description && <p className="text-smoke text-xs">{normalizeDescriptionPace(safeStr(workout.description), workout)}</p>}
+                              {workout.coach_notes && <p className="text-volt/80 text-xs">Coach: {safeStr(workout.coach_notes)}</p>}
+                              {workout.intervals_detail && typeof workout.intervals_detail === 'object' && (
+                                <p className="text-smoke text-xs">
+                                  {workout.intervals_detail.reps}x{workout.intervals_detail.distance_m}m @ {formatPace(workout.intervals_detail.pace_sec_km)}/km, {workout.intervals_detail.rest_seconds}s rest
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
