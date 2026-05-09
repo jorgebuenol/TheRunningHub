@@ -6,7 +6,7 @@ import { calcDefaultZones } from '@shared/hrZones';
 import {
   ChevronDown, ChevronRight, Check, Circle, CircleDot, CheckCircle,
   User, Activity, Target, Calendar, Heart, Moon, Apple, Briefcase,
-  RefreshCw, Dumbbell, Smartphone, Link2, Unlink, Loader, AlertCircle,
+  RefreshCw, Dumbbell, Smartphone, Link2, Loader, AlertCircle,
 } from 'lucide-react';
 import IntervalsIcuConnectModal from '../components/IntervalsIcuConnectModal';
 
@@ -1093,13 +1093,10 @@ function ZoneRow({ zone, label, color, percent, range, value, onChange }) {
 }
 
 function TechnologyFields({ athlete, updateField }) {
-  const [stravaLoading, setStravaLoading] = useState(false);
-  const [stravaMsg, setStravaMsg] = useState('');
   const [intervalsSyncing, setIntervalsSyncing] = useState(false);
   const [intervalsMsg, setIntervalsMsg] = useState('');
   const [showIntervalsModal, setShowIntervalsModal] = useState(false);
   const [intervalsStatus, setIntervalsStatus] = useState(null); // { connected, valid, athlete_name }
-  const isStravaConnected = !!athlete.strava_athlete_id;
   const isIntervalsConnected = !!(athlete.intervals_icu_api_key && athlete.intervals_icu_athlete_id);
 
   // Resolve the live Intervals.icu account name once credentials are stored. If the
@@ -1142,79 +1139,8 @@ function TechnologyFields({ athlete, updateField }) {
     setShowIntervalsModal(false);
   }
 
-  // Check URL for strava=connected on mount
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('strava') === 'connected') {
-      setStravaMsg('Strava connected successfully!');
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
-
-  async function handleStravaConnect() {
-    setStravaLoading(true);
-    setStravaMsg('');
-    try {
-      const { url } = await api.stravaConnect(athlete.id);
-      window.location.href = url;
-    } catch (err) {
-      setStravaMsg(err.message || 'Failed to connect Strava');
-      setStravaLoading(false);
-    }
-  }
-
-  async function handleStravaDisconnect() {
-    setStravaLoading(true);
-    setStravaMsg('');
-    try {
-      await api.stravaDisconnect(athlete.id);
-      setStravaMsg('Strava disconnected');
-      // Force re-fetch athlete to clear strava_athlete_id
-      window.location.reload();
-    } catch (err) {
-      setStravaMsg(err.message || 'Failed to disconnect');
-      setStravaLoading(false);
-    }
-  }
-
   return (
     <div className="space-y-4">
-      {/* Strava Integration */}
-      <div>
-        <FieldLabel>Strava</FieldLabel>
-        <div className="flex items-center gap-3 mt-1">
-          {isStravaConnected ? (
-            <>
-              <span className="flex items-center gap-2 text-sm text-green-400 font-semibold">
-                <Check size={16} /> Strava Connected
-              </span>
-              <button
-                onClick={handleStravaDisconnect}
-                disabled={stravaLoading}
-                className="px-3 py-1.5 border border-red-500/50 text-red-400 hover:bg-red-500/10 text-xs uppercase font-bold tracking-wider flex items-center gap-1 transition-colors"
-              >
-                {stravaLoading ? <Loader size={12} className="animate-spin" /> : <Unlink size={12} />}
-                Disconnect
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={handleStravaConnect}
-              disabled={stravaLoading}
-              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2 transition-colors"
-            >
-              {stravaLoading ? <Loader size={14} className="animate-spin" /> : <Link2 size={14} />}
-              Connect Strava
-            </button>
-          )}
-        </div>
-        {stravaMsg && (
-          <p className={`text-xs mt-2 ${stravaMsg.includes('success') || stravaMsg.includes('connected') ? 'text-green-400' : 'text-red-400'}`}>
-            {stravaMsg}
-          </p>
-        )}
-      </div>
-
       <div>
         <FieldLabel>GPS Watch Model</FieldLabel>
         <StableTextInput

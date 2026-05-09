@@ -171,8 +171,8 @@ export async function getAthleteMonitoringSummary(supabase, athleteId) {
   // --- New: Weekly KM history (last 6 weeks, including logged activities) ---
   const weeklyKmHistory = getWeeklyKmHistory(workouts, loggedActivities);
 
-  // --- New: RPE 7-day trend ---
-  const rpe7dTrend = build7dRpeTrend(feedback, now);
+  // --- New: RPE trend (last 7 feedback entries, regardless of strict 7-day window) ---
+  const rpe7dTrend = build7dRpeTrend(feedback);
 
   // --- New: Readiness 7-day trend ---
   const readiness7dTrend = build7dReadinessTrend(readiness, now);
@@ -191,8 +191,8 @@ export async function getAthleteMonitoringSummary(supabase, athleteId) {
   }
   if (todayReadiness?.composite_score < 2.5) flags.push({ type: 'readiness', message: 'Low readiness score today' });
   if (painFlags.length > 0) flags.push({ type: 'pain', message: `Pain: ${[...new Set(painFlags.map(p => p.pain_location))].join(', ')}` });
-  const highRpeDays = rpe7dTrend.filter(d => d.rpe !== null && d.rpe > 8).length;
-  if (highRpeDays >= 3) flags.push({ type: 'rpe', message: `High RPE (>8) for ${highRpeDays} of last 7 days` });
+  const highRpeEntries = rpe7dTrend.filter(d => d.rpe !== null && d.rpe > 8).length;
+  if (highRpeEntries >= 3) flags.push({ type: 'rpe', message: `High RPE (>8) in ${highRpeEntries} of last 7 entries` });
   // Only flag low compliance after at least 1 full week of planned workouts
   const allPlannedWorkouts = deduplicateByDateType(workouts).filter(w => w.workout_type !== 'rest');
   const oldestPlannedDate = allPlannedWorkouts.length > 0 ? new Date(allPlannedWorkouts[0].workout_date) : null;
@@ -286,27 +286,30 @@ function getWeeklyKmHistory(workouts, loggedActivities = []) {
 }
 
 /**
- * 7-day RPE trend from feedback (line chart data)
+ * Last 7 RPE entries trend (line chart data).
+ * Uses the most recent 7 feedback rows ordered by their workout date so the
+ * chart stays populated even when an athlete logs sparsely. Falls back to
+ * created_at when the workout join is missing a date.
  */
-function build7dRpeTrend(feedback, now) {
-  const trend = [];
-  for (let d = 6; d >= 0; d--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - d);
-    const dateStr = date.toISOString().split('T')[0];
+function build7dRpeTrend(feedback) {
+  const dated = (feedback || [])
+    .map(f => {
+      const dateStr = f.workouts?.workout_date
+        || (f.created_at ? f.created_at.split('T')[0] : null);
+      return dateStr ? { ...f, _date: dateStr } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a._date.localeCompare(b._date));
 
-    const dayFeedback = feedback.filter(f => f.workouts?.workout_date === dateStr);
-    const avgRpe = dayFeedback.length > 0
-      ? Math.round((dayFeedback.reduce((sum, f) => sum + f.rpe, 0) / dayFeedback.length) * 10) / 10
-      : null;
-
-    trend.push({
-      date: dateStr,
-      day: date.toLocaleDateString('en-US', { weekday: 'short' }),
-      rpe: avgRpe,
-    });
-  }
-  return trend;
+  const recent = dated.slice(-7);
+  return recent.map(f => {
+    const date = new Date(f._date + 'T00:00:00');
+    return {
+      date: f._date,
+      day: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      rpe: f.rpe,
+    };
+  });
 }
 
 /**

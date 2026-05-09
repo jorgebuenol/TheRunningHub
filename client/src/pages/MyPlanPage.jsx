@@ -8,7 +8,7 @@ import WorkoutDetailPanel from '../components/WorkoutDetailPanel';
 import ActivityDetailPanel from '../components/ActivityDetailPanel';
 import StrengthSessionModal from '../components/StrengthSessionModal';
 import RescheduleModal from '../components/RescheduleModal';
-import { Calendar, Check, Zap, MessageSquare, ClipboardCheck, BarChart3, User, Plus, RefreshCw, Loader, CalendarClock } from 'lucide-react';
+import { Calendar, Check, Zap, MessageSquare, ClipboardCheck, BarChart3, User, Plus, CalendarClock } from 'lucide-react';
 import { getOverallProgress } from '@shared/onboardingProgress';
 
 const WORKOUT_COLORS = {
@@ -78,8 +78,6 @@ export default function MyPlanPage() {
   const [showStrengthModal, setShowStrengthModal] = useState(false);
   const [editingStrength, setEditingStrength] = useState(null);
   const [rescheduleWorkout, setRescheduleWorkout] = useState(null);
-  const [stravaSyncing, setStravaSyncing] = useState(false);
-  const [stravaMsg, setStravaMsg] = useState('');
 
   useEffect(() => {
     loadMyData();
@@ -363,30 +361,6 @@ export default function MyPlanPage() {
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-display text-xl">THIS WEEK</h2>
         <div className="flex items-center gap-2">
-          {athlete?.strava_athlete_id && (
-            <button
-              onClick={async () => {
-                setStravaSyncing(true);
-                setStravaMsg('');
-                try {
-                  const result = await api.stravaSync(athlete.id);
-                  setStravaMsg(`Synced ${result.synced} activities`);
-                  loadMyData();
-                  setTimeout(() => setStravaMsg(''), 4000);
-                } catch (err) {
-                  setStravaMsg(err.message || 'Sync failed');
-                  setTimeout(() => setStravaMsg(''), 4000);
-                } finally {
-                  setStravaSyncing(false);
-                }
-              }}
-              disabled={stravaSyncing}
-              className="px-3 py-2 border border-orange-500 text-orange-400 hover:bg-orange-500/20 text-xs uppercase font-bold tracking-wider transition-colors flex items-center gap-1"
-            >
-              {stravaSyncing ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-              Sync Strava
-            </button>
-          )}
           <button
             onClick={() => { setEditingStrength(null); setShowStrengthModal(true); }}
             className="px-3 py-2 border border-volt text-volt hover:bg-volt/20 text-xs uppercase font-bold tracking-wider transition-colors flex items-center gap-1"
@@ -395,11 +369,6 @@ export default function MyPlanPage() {
           </button>
         </div>
       </div>
-      {stravaMsg && (
-        <div className={`text-xs px-3 py-1 mb-2 ${stravaMsg.includes('Synced') ? 'text-green-400' : 'text-red-400'}`}>
-          {stravaMsg}
-        </div>
-      )}
 
       {/* Mobile: stacked list */}
       <div className="sm:hidden space-y-2 mb-8">

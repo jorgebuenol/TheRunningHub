@@ -19,7 +19,7 @@ const RUN_ACTIVITY_TYPES = new Set(['Run', 'TrailRun', 'VirtualRun']);
  * Returns { synced, matched, fetched, errors }.
  *
  * `synced`  — number of workouts updated with actuals
- * `matched` — same as synced (kept for symmetry with Strava response shape)
+ * `matched` — same as synced (kept for response-shape stability)
  * `fetched` — total activities returned by Intervals.icu in the window
  */
 export async function syncIntervalsIcuActivities(supabase, athleteId, { daysBack = 7 } = {}) {

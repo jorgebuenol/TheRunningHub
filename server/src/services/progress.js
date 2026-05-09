@@ -26,15 +26,45 @@ function toDateStr(d) {
 /**
  * Get full progress data for an athlete (used by both coach + athlete views)
  */
+// Hard sanity bounds for easy/recovery pace in sec/km (4:30 to 8:30).
+// Anything outside this window is treated as a watch glitch / unit error / not a
+// real run, regardless of athlete-specific zones.
+const EASY_PACE_MIN_SEC = 270;
+const EASY_PACE_MAX_SEC = 510;
+
+/** True if pace looks like a plausible easy/recovery pace for this athlete. */
+function isEasyPaceSane(paceSecKm, athletePaceMin, athletePaceMax) {
+  if (!paceSecKm || paceSecKm <= 0) return false;
+  if (paceSecKm < EASY_PACE_MIN_SEC || paceSecKm > EASY_PACE_MAX_SEC) return false;
+  // Athlete has a personal easy zone — widen by ±60 sec/km so a normal slow day
+  // still counts but a tempo or sprint accidentally tagged "easy" is rejected.
+  if (athletePaceMin && athletePaceMax) {
+    const lo = athletePaceMin - 60;
+    const hi = athletePaceMax + 60;
+    if (paceSecKm < lo || paceSecKm > hi) return false;
+  }
+  return true;
+}
+
 export async function getAthleteProgress(supabase, athleteId) {
-  // 1. Fetch active plan with weeks
-  const { data: plans } = await supabase
-    .from('training_plans')
-    .select('id, name, goal_race, race_date, total_weeks, status')
-    .eq('athlete_id', athleteId)
-    .in('status', ['approved', 'draft'])
-    .order('updated_at', { ascending: false })
-    .limit(1);
+  // 1. Fetch athlete record (for personal easy pace zone) and active plan in parallel.
+  const [{ data: athlete }, { data: plans }] = await Promise.all([
+    supabase
+      .from('athletes')
+      .select('pace_easy_min, pace_easy_max')
+      .eq('id', athleteId)
+      .maybeSingle(),
+    supabase
+      .from('training_plans')
+      .select('id, name, goal_race, race_date, total_weeks, status')
+      .eq('athlete_id', athleteId)
+      .in('status', ['approved', 'draft'])
+      .order('updated_at', { ascending: false })
+      .limit(1),
+  ]);
+
+  const paceEasyMin = athlete?.pace_easy_min || null;
+  const paceEasyMax = athlete?.pace_easy_max || null;
 
   const plan = plans?.[0] || null;
   if (!plan) {
@@ -116,9 +146,13 @@ export async function getAthleteProgress(supabase, athleteId) {
       ? parseFloat(planWeek.km_target || 0)
       : weekWorkoutsDeduped.reduce((s, wo) => s + parseFloat(wo.distance_km || 0), 0);
 
-    // Easy pace average (only completed easy runs with actual pace)
+    // Easy pace average — completed easy/recovery runs only, with sane pace bounds
+    // and (when available) the athlete's personal easy zone ± 60 sec/km wiggle.
+    // This filters out tempo/sprint workouts mis-tagged as easy and watch glitches.
     const easyRuns = weekWorkoutsDeduped.filter(wo =>
-      wo.workout_type === 'easy' && wo.status === 'completed' && wo.actual_avg_pace > 0
+      (wo.workout_type === 'easy' || wo.workout_type === 'recovery')
+      && wo.status === 'completed'
+      && isEasyPaceSane(wo.actual_avg_pace, paceEasyMin, paceEasyMax)
     );
     const avgEasyPace = easyRuns.length > 0
       ? Math.round(easyRuns.reduce((s, wo) => s + wo.actual_avg_pace, 0) / easyRuns.length)

@@ -89,8 +89,6 @@ export default function CalendarPage() {
   const [strengthModalDate, setStrengthModalDate] = useState(null);
   const [editingStrength, setEditingStrength] = useState(null);
   const [rescheduleWorkout, setRescheduleWorkout] = useState(null);
-  const [stravaSyncing, setStravaSyncing] = useState(false);
-  const [stravaMsg, setStravaMsg] = useState('');
   const [intervalsSyncing, setIntervalsSyncing] = useState(false);
   const [intervalsMsg, setIntervalsMsg] = useState('');
   const [pushingPlan, setPushingPlan] = useState(false);
@@ -395,30 +393,6 @@ export default function CalendarPage() {
               <Plus size={14} /> Log Activity
             </button>
           )}
-          {athlete?.strava_athlete_id && (
-            <button
-              onClick={async () => {
-                setStravaSyncing(true);
-                setStravaMsg('');
-                try {
-                  const result = await api.stravaSync(athlete.id);
-                  setStravaMsg(`Synced ${result.synced} activities`);
-                  loadData(); // refresh calendar
-                  setTimeout(() => setStravaMsg(''), 4000);
-                } catch (err) {
-                  setStravaMsg(err.message || 'Sync failed');
-                  setTimeout(() => setStravaMsg(''), 4000);
-                } finally {
-                  setStravaSyncing(false);
-                }
-              }}
-              disabled={stravaSyncing}
-              className="px-3 py-2 border border-orange-500 text-orange-400 hover:bg-orange-500/20 text-xs uppercase font-bold tracking-wider transition-colors flex items-center gap-1 min-h-[44px]"
-            >
-              {stravaSyncing ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-              Sync Strava
-            </button>
-          )}
           {athlete?.intervals_icu_athlete_id && (
             <button
               onClick={async () => {
@@ -468,11 +442,6 @@ export default function CalendarPage() {
             </button>
           )}
         </div>
-        {stravaMsg && (
-          <div className={`text-xs px-3 py-1 mt-1 ${stravaMsg.includes('Synced') ? 'text-green-400' : 'text-red-400'}`}>
-            {stravaMsg}
-          </div>
-        )}
         {intervalsMsg && (
           <div className={`text-xs px-3 py-1 mt-1 ${intervalsMsg.includes('Synced') ? 'text-green-400' : 'text-red-400'}`}>
             {intervalsMsg}
