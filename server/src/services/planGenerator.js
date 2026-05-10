@@ -542,6 +542,15 @@ Fartlek: "30-40 min easy run with [N x 1 min] surges at 'comfortably hard' effor
 
 Rest Day: "Complete rest or gentle 20-30 min walk. No running."
 
+**WORKOUT INTERNAL CONSISTENCY (every generated workout must satisfy ALL of these):**
+For each workout, workout_type / pace_range / hr_zone / rpe_target / description / coach_notes must ALL describe the same intensity. Concretely:
+- easy / recovery / long_run: hr_zone "Z2" ("Z1" for recovery), rpe_target 3-5, pace_range entirely within easy zone, coach_notes use words like "conversational", "comfortable", "easy".
+- tempo / race_pace: hr_zone "Z4" (SINGLE token -- never "Z2-Z4" or any range), rpe_target 6-7, pace_range narrow (within +/-15 sec/km) around threshold or race pace, coach_notes use "comfortably hard", "controlled".
+- intervals: hr_zone "Z5", rpe_target 8-9, pace_range narrow around interval pace, coach_notes use "hard but controlled".
+- rest / cross_training: all pace and HR fields null, rpe_target null.
+- description MUST follow the WORKOUT TYPE TEMPLATES above (warm-up + main set + cool-down narrative). NEVER write a one-line category label like "Threshold development".
+NEVER write a workout where coach_notes says "easy/conversational" but workout_type is tempo / intervals / race_pace. If the week needs to be easier, CHANGE the workout_type to easy/recovery -- do not keep the quality label and soften the parameters.
+
 **ADAPTATION RULES (apply based on previous week data):**
 
 If ACWR > 1.5: REDUCE this week's km by 15-20%. Eliminate highest-intensity session. Add recovery run instead.
@@ -813,6 +822,7 @@ The coach knows context the data doesn't. When no Level 1 flag is active, coach 
 - If athlete_state = "fresh" and no Level 1 flags: Coach intent volume/intensity wins, even if ACWR is yellow or last week's RPE was high.
 - specific_focus text always carries through to coach_notes on relevant workouts. If coach says "cadence work in easy runs," every easy run gets a coach_note about cadence.
 - adjustments text governs scheduling (which day = long run, which day = rest, etc.) — never override coach scheduling.
+- When athlete_state ("fatigued", "recovering", "post_race") conflicts with a quality weekly_objective ("Threshold development", "VO2max stimulus", "Race-specific prep", "Introduce tempo work"): athlete_state wins. Either schedule one real, properly-prescribed quality session and make the rest easy/recovery (do not spread softened intensity across the week), OR drop quality entirely and run an easy maintenance week. NEVER soften a quality session by widening its pace range, lowering its RPE target, or writing easy-style coach_notes — that produces internally inconsistent workouts.
 
 LEVEL 3 — Auto-context guidance (default behavior when coach intent is silent)
 When the coach didn't specify, use auto-context to infer:
