@@ -62,10 +62,19 @@ export function AuthProvider({ children }) {
   }
 
   async function signUp(email, password, metadata = {}) {
+    // Pin the confirmation-email redirect to the host the user is signing up
+    // from. Overrides Supabase's project-level Site URL so a misconfigured
+    // dashboard setting can't produce malformed links.
+    const redirectTo = typeof window !== 'undefined'
+      ? `${window.location.origin}/login`
+      : undefined;
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: metadata },
+      options: {
+        data: metadata,
+        emailRedirectTo: redirectTo,
+      },
     });
     if (error) throw error;
     return data;
