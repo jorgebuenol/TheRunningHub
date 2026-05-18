@@ -79,7 +79,6 @@ export const api = {
     request('/api/chat/plan-review', { method: 'POST', body: JSON.stringify({ planId, athleteId, message, history }), timeout: 120000 }),
 
   // Intervals.icu
-  syncToIntervals: (athleteId, planId) => request(`/api/intervals/push/${athleteId}/${planId}`, { method: 'POST' }),
   pullFromIntervals: (athleteId) => request(`/api/intervals/pull/${athleteId}`, { method: 'POST' }),
   intervalsSync: (athleteId) => request(`/api/intervals/sync/${athleteId}`),
   intervalsConnect: (athleteId, body) => request(`/api/intervals/connect/${athleteId}`, { method: 'POST', body: JSON.stringify(body) }),

@@ -252,7 +252,7 @@ export default function AthleteDetailPage() {
         setMessage('No active plan to sync');
         return;
       }
-      const result = await api.syncToIntervals(id, activePlan.id);
+      const result = await api.pushPlanToIntervals(activePlan.id);
       setMessage(`Synced ${result.synced}/${result.total} workouts to Intervals.icu`);
     } catch (err) {
       setMessage(`Sync error: ${err.message}`);

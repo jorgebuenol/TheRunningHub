@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { coachOnly } from '../middleware/auth.js';
 import { sendPlanPublishedEmail } from './email.js';
-import { pushPlanWorkouts } from '../services/intervalsPush.js';
+import { pushPlanWorkouts, removePlanFromIntervals, removeWeekFromIntervals } from '../services/intervalsPush.js';
 import { generateTrainingPlan, generateMacroPlan, generateCouchToRunMacro, generateWeeklyDetail, checkRedFlags, deriveAthleteLevel, intensityFromPhase } from '../services/planGenerator.js';
 import { getAthleteMonitoringSummary } from '../services/monitoring.js';
 import { buildGenerationContext } from '../services/generationContext.js';
@@ -747,6 +747,12 @@ planRoutes.delete('/:planId', coachOnly, async (req, res, next) => {
       return res.status(409).json({ message: 'Only draft plans can be deleted. Unpublish the plan first.' });
     }
 
+    try {
+      await removePlanFromIntervals(req.supabase, planId);
+    } catch (err) {
+      console.warn('[intervals.delete] plan delete cleanup failed:', err.message);
+    }
+
     const { error: deleteErr } = await req.supabase
       .from('training_plans')
       .delete()
@@ -776,6 +782,12 @@ planRoutes.delete('/:planId/weeks/:weekId', coachOnly, async (req, res, next) =>
 
     if (weeks.length <= 1) {
       return res.status(400).json({ message: 'Cannot delete the last week. Delete the entire plan instead.' });
+    }
+
+    try {
+      await removeWeekFromIntervals(req.supabase, weekId);
+    } catch (err) {
+      console.warn('[intervals.delete] week delete cleanup failed:', err.message);
     }
 
     // Delete the week (CASCADE removes workouts)

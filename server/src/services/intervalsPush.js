@@ -132,12 +132,13 @@ function buildIntervalDescription(workout) {
   return lines.join('\n');
 }
 
-/**
- * Build the ICU event payload and POST it. Caller has already verified athlete
- * credentials and threshold pace; this just translates one workout row.
- */
-async function pushOne(supabase, workout, athlete) {
-  const payload = {
+// Conservative batch size for the bulk events endpoint. ICU doesn't publish a
+// hard limit; 50 keeps each request small and bounds the blast radius on retry.
+const BULK_CHUNK_SIZE = 50;
+
+function buildEventPayload(workout) {
+  return {
+    external_id: workout.id,
     category: 'WORKOUT',
     start_date_local: `${workout.workout_date}T00:00:00`,
     type: 'Run',
@@ -146,39 +147,94 @@ async function pushOne(supabase, workout, athlete) {
     moving_time: workout.duration_minutes ? workout.duration_minutes * 60 : undefined,
     workout_doc: {},
   };
+}
 
-  const res = await fetch(
-    `${INTERVALS_BASE}/athlete/${athlete.intervals_icu_athlete_id}/events`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: authHeaderFor(athlete.intervals_icu_api_key),
-      },
-      body: JSON.stringify(payload),
+/**
+ * Upsert a batch of events on ICU using `external_id = workout.id` as the dedupe
+ * key. Same external_id POSTed again updates in place; date change moves the
+ * event (verified empirically — see server/scripts/probe-intervals-icu.js).
+ */
+async function bulkUpsertEvents(athlete, workouts) {
+  if (!workouts.length) return [];
+
+  const url = `${INTERVALS_BASE}/athlete/${athlete.intervals_icu_athlete_id}/events/bulk?upsert=true`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: authHeaderFor(athlete.intervals_icu_api_key),
     },
-  );
+    body: JSON.stringify(workouts.map(buildEventPayload)),
+  });
 
   if (!res.ok) {
     const text = await res.text();
     throw new IntervalsPushError(
-      `Intervals.icu rejected the workout: ${text.slice(0, 200)}`,
+      `Intervals.icu rejected the workouts: ${text.slice(0, 200)}`,
       502,
     );
   }
 
-  const event = await res.json();
-  const eventId = event?.id != null ? String(event.id) : null;
+  const events = await res.json();
+  return Array.isArray(events) ? events : [];
+}
 
-  await supabase
-    .from('workouts')
-    .update({
-      intervals_icu_event_id: eventId,
-      synced_to_intervals_at: new Date().toISOString(),
-    })
-    .eq('id', workout.id);
+async function persistSyncedEventIds(supabase, workouts, events) {
+  // Bulk response carries external_id per event; map back so we can record the
+  // ICU id on each workout row (kept for audit only — dedupe lives on ICU now).
+  const byExternalId = new Map();
+  for (const e of events) {
+    if (e?.external_id != null) byExternalId.set(String(e.external_id), e);
+  }
+  const syncedAt = new Date().toISOString();
+  const results = [];
 
-  return { workout_id: workout.id, icu_event_id: eventId };
+  for (let i = 0; i < workouts.length; i++) {
+    const w = workouts[i];
+    const matched = byExternalId.get(String(w.id)) ?? events[i];
+    const eventId = matched?.id != null ? String(matched.id) : null;
+
+    await supabase
+      .from('workouts')
+      .update({
+        intervals_icu_event_id: eventId,
+        synced_to_intervals_at: syncedAt,
+      })
+      .eq('id', w.id);
+
+    results.push({ workout_id: w.id, icu_event_id: eventId });
+  }
+  return results;
+}
+
+async function pushBatch(supabase, workouts, athlete) {
+  const events = await bulkUpsertEvents(athlete, workouts);
+  return persistSyncedEventIds(supabase, workouts, events);
+}
+
+/**
+ * Delete ICU events by external_id. No-op if athlete has no creds or the list
+ * is empty — used from cascade-delete paths where the local rows are about to
+ * disappear and we want the calendar to follow.
+ */
+async function bulkDeleteEvents(athlete, externalIds) {
+  if (!externalIds.length) return;
+  const url = `${INTERVALS_BASE}/athlete/${athlete.intervals_icu_athlete_id}/events/bulk-delete`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: authHeaderFor(athlete.intervals_icu_api_key),
+    },
+    body: JSON.stringify(externalIds.map(id => ({ external_id: id }))),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new IntervalsPushError(
+      `Intervals.icu rejected the delete: ${text.slice(0, 200)}`,
+      502,
+    );
+  }
 }
 
 /**
@@ -210,7 +266,9 @@ export async function pushWorkoutToIntervals(supabase, workoutId) {
     throw new IntervalsPushError(THRESHOLD_PACE_ERROR, 412);
   }
 
-  return pushOne(supabase, workout, athlete);
+  console.log('[intervals.push]', { athleteId: athlete.id, workoutCount: 1, upsert: true });
+  const [result] = await pushBatch(supabase, [workout], athlete);
+  return result;
 }
 
 /**
@@ -218,8 +276,9 @@ export async function pushWorkoutToIntervals(supabase, workoutId) {
  * plan level (instead of per-workout) and short-circuits if it's missing —
  * the coach gets a single clear 412 instead of N identical errors.
  *
- * Best-effort across workouts: per-workout failures are returned in `results`.
- * Throws IntervalsPushError for plan-level failures (no creds, no threshold pace).
+ * Upserts via /events/bulk?upsert=true keyed on `external_id = workout.id`, so
+ * repeated calls and added weeks no longer duplicate. Chunked at BULK_CHUNK_SIZE
+ * to keep request payloads bounded.
  */
 export async function pushPlanWorkouts(supabase, planId) {
   const { data: athleteRows } = await supabase
@@ -248,15 +307,78 @@ export async function pushPlanWorkouts(supabase, planId) {
     .neq('workout_type', 'rest')
     .order('workout_date');
 
+  const list = workouts || [];
+  console.log('[intervals.push]', { athleteId: athlete.id, workoutCount: list.length, upsert: true });
+
   const results = [];
-  for (const w of workouts || []) {
+  for (let i = 0; i < list.length; i += BULK_CHUNK_SIZE) {
+    const chunk = list.slice(i, i + BULK_CHUNK_SIZE);
     try {
-      const r = await pushOne(supabase, w, athlete);
-      results.push({ ...r, status: 'ok' });
+      const chunkResults = await pushBatch(supabase, chunk, athlete);
+      for (const r of chunkResults) results.push({ ...r, status: 'ok' });
     } catch (err) {
-      results.push({ workout_id: w.id, status: 'error', error: err.message });
+      for (const w of chunk) {
+        results.push({ workout_id: w.id, status: 'error', error: err.message });
+      }
     }
   }
   const synced = results.filter(r => r.status === 'ok').length;
   return { synced, total: results.length, results };
+}
+
+/**
+ * Remove every ICU event tied to a plan's workouts. Called from the plan
+ * DELETE route before the local cascade so the calendar follows the data.
+ * Best-effort: returns silently if the athlete has no ICU creds or the plan
+ * has no synced workouts.
+ */
+export async function removePlanFromIntervals(supabase, planId) {
+  const { data: planRow } = await supabase
+    .from('training_plans')
+    .select('athletes!inner(id, intervals_icu_api_key, intervals_icu_athlete_id)')
+    .eq('id', planId)
+    .single();
+
+  const athlete = planRow?.athletes;
+  if (!athlete?.intervals_icu_api_key || !athlete?.intervals_icu_athlete_id) return;
+
+  const { data: workouts } = await supabase
+    .from('workouts')
+    .select('id, plan_weeks!inner(plan_id)')
+    .eq('plan_weeks.plan_id', planId);
+
+  const ids = (workouts || []).map(w => w.id);
+  if (!ids.length) return;
+
+  for (let i = 0; i < ids.length; i += BULK_CHUNK_SIZE) {
+    await bulkDeleteEvents(athlete, ids.slice(i, i + BULK_CHUNK_SIZE));
+  }
+}
+
+/**
+ * Remove ICU events for a single plan-week's workouts. Same contract as
+ * removePlanFromIntervals but scoped to one week, used from the week DELETE
+ * route.
+ */
+export async function removeWeekFromIntervals(supabase, weekId) {
+  const { data: weekRow } = await supabase
+    .from('plan_weeks')
+    .select('plan_id, training_plans!inner(athletes!inner(id, intervals_icu_api_key, intervals_icu_athlete_id))')
+    .eq('id', weekId)
+    .single();
+
+  const athlete = weekRow?.training_plans?.athletes;
+  if (!athlete?.intervals_icu_api_key || !athlete?.intervals_icu_athlete_id) return;
+
+  const { data: workouts } = await supabase
+    .from('workouts')
+    .select('id')
+    .eq('plan_week_id', weekId);
+
+  const ids = (workouts || []).map(w => w.id);
+  if (!ids.length) return;
+
+  for (let i = 0; i < ids.length; i += BULK_CHUNK_SIZE) {
+    await bulkDeleteEvents(athlete, ids.slice(i, i + BULK_CHUNK_SIZE));
+  }
 }
