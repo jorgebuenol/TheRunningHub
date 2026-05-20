@@ -34,15 +34,12 @@ workoutRoutes.patch('/:id', async (req, res, next) => {
   }
 });
 
-// POST reschedule a workout to a different day within the same week (athlete only)
+// POST reschedule a workout to a different day within the same week
+// Athletes can reschedule their own workouts; coaches can reschedule any athlete's workouts.
 workoutRoutes.post('/:id/reschedule', async (req, res, next) => {
   try {
     const { id } = req.params;
     const { new_date } = req.body; // 'YYYY-MM-DD'
-
-    if (req.profile.role !== 'athlete') {
-      return res.status(403).json({ message: 'Only athletes can reschedule workouts' });
-    }
 
     if (!new_date) {
       return res.status(400).json({ message: 'new_date is required' });
@@ -59,9 +56,20 @@ workoutRoutes.post('/:id/reschedule', async (req, res, next) => {
       return res.status(404).json({ message: 'Workout not found' });
     }
 
-    // Must be the athlete's own workout
-    if (workout.athlete_id !== req.profile.id) {
-      return res.status(403).json({ message: 'You can only reschedule your own workouts' });
+    // Role-aware ownership check.
+    // athletes.id (workout.athlete_id) is distinct from profiles.id (req.profile.id),
+    // so we resolve the caller's athlete records via profile_id.
+    if (req.profile.role === 'athlete') {
+      const { data: ownedAthletes } = await req.supabase
+        .from('athletes')
+        .select('id')
+        .eq('profile_id', req.user.id);
+      const ownedIds = (ownedAthletes || []).map(a => a.id);
+      if (!ownedIds.includes(workout.athlete_id)) {
+        return res.status(403).json({ message: 'You can only reschedule your own workouts' });
+      }
+    } else if (req.profile.role !== 'coach') {
+      return res.status(403).json({ message: 'Not authorized to reschedule workouts' });
     }
 
     // Cannot reschedule completed workouts
@@ -74,11 +82,11 @@ workoutRoutes.post('/:id/reschedule', async (req, res, next) => {
       return res.status(400).json({ message: 'Cannot reschedule rest days' });
     }
 
-    // Validate new_date is within the same week (Mon-Sun) as the workout
-    const workoutDate = new Date(workout.workout_date + 'T00:00:00');
-    const newDate = new Date(new_date + 'T00:00:00');
+    // Validate new_date is within the same week (Mon-Sun) as the workout.
+    // Parse as UTC midnight so getUTCDay() doesn't shift by ±1 in non-UTC timezones.
+    const workoutDate = new Date(workout.workout_date + 'T00:00:00Z');
+    const newDate = new Date(new_date + 'T00:00:00Z');
 
-    // Get Monday of workout's week
     const day = workoutDate.getUTCDay();
     const mondayOffset = day === 0 ? -6 : 1 - day;
     const monday = new Date(workoutDate);

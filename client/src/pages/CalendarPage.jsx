@@ -599,7 +599,7 @@ export default function CalendarPage() {
                           <span className="text-cyan-400 text-[10px] font-semibold">RESCHEDULED</span>
                         </div>
                       )}
-                      {!isCoach && workout.status !== 'completed' && workout.workout_type !== 'rest' && (
+                      {workout.status !== 'completed' && workout.workout_type !== 'rest' && (
                         <button
                           onClick={(e) => { e.stopPropagation(); setRescheduleWorkout({ ...workout, _allWeekWorkouts: allWeekWorkouts }); }}
                           className="flex items-center gap-1 mt-2 text-cyan-400 hover:text-cyan-300 text-[10px] uppercase font-bold tracking-wider transition-colors"
