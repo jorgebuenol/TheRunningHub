@@ -113,6 +113,16 @@ planRoutes.post('/generate/:athleteId', coachOnly, async (req, res, next) => {
       return res.status(400).json({ message: 'Athlete must have a goal race and date set' });
     }
 
+    const raceDate = new Date(athlete.goal_race_date + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (raceDate < today) {
+      return res.status(400).json({
+        code: 'race_date_in_past',
+        message: "Race date is in the past. Update the athlete's race date before generating a new plan.",
+      });
+    }
+
     // If Magic Mile was provided, estimate VDOT from it
     let effectiveVdot = vdotOverride || athlete.vdot;
     if (magicMileSeconds && !vdotOverride) {

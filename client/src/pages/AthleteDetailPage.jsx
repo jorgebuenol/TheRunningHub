@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
-import { formatPace, formatTime } from '../lib/vdot';
+import { formatPace, formatTime, parseTime } from '../lib/vdot';
 import { getOverallProgress, getSectionStatus, ONBOARDING_SECTIONS } from '@shared/onboardingProgress';
 import { calcDefaultZones } from '@shared/hrZones';
 import {
@@ -22,6 +22,22 @@ function deriveAthleteLevel(weeklyKm) {
 // ─── Lookup constants (for human-readable labels) ───────────────────────────
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+const RACES = ['5K', '10K', 'Half Marathon', 'Marathon'];
+
+function todayISO() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString().split('T')[0];
+}
+
+function isPastDate(isoStr) {
+  if (!isoStr) return false;
+  const d = new Date(isoStr + 'T00:00:00');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return d < today;
+}
 
 const QUALITY_OPTIONS = [
   { value: 'poor', label: 'Poor' },
@@ -210,11 +226,16 @@ export default function AthleteDetailPage() {
     setShowGenModal(true);
   }
 
-  async function handleConfirmGenerate() {
+  async function handleConfirmGenerate(goalUpdate) {
     setGenerating(true);
     setMessage('');
     setShowGenModal(false);
     try {
+      if (goalUpdate) {
+        await api.updateAthlete(id, goalUpdate);
+        await loadAthlete();
+      }
+
       const overrides = {};
       if (genOverrides.levelOverride) overrides.levelOverride = genOverrides.levelOverride;
       if (genOverrides.vdotOverride) overrides.vdotOverride = parseInt(genOverrides.vdotOverride);
@@ -808,11 +829,38 @@ function PreGenerationModal({ athlete, genOverrides, setGenOverrides, onConfirm,
   const isBeginner = effectiveLevel === 'beginner';
   const hasRaceTime = athlete.time_5k || athlete.time_10k || athlete.time_half_marathon || athlete.time_marathon;
 
-  const weeksToRace = athlete.goal_race_date
-    ? Math.ceil((new Date(athlete.goal_race_date) - new Date()) / (7 * 24 * 60 * 60 * 1000))
+  const racePast = isPastDate(athlete.goal_race_date);
+  const [goalEdit, setGoalEdit] = useState({
+    goal_race: athlete.goal_race || '',
+    goal_time_seconds: athlete.goal_time_seconds || null,
+    goal_race_date: racePast ? '' : (athlete.goal_race_date || ''),
+  });
+
+  const newRaceValid = !racePast || (
+    goalEdit.goal_race &&
+    goalEdit.goal_race_date &&
+    !isPastDate(goalEdit.goal_race_date)
+  );
+
+  const effectiveRaceDate = racePast ? goalEdit.goal_race_date : athlete.goal_race_date;
+  const weeksToRace = effectiveRaceDate
+    ? Math.ceil((new Date(effectiveRaceDate + 'T00:00:00') - new Date()) / (7 * 24 * 60 * 60 * 1000))
     : null;
 
   const weeksWarning = weeksToRace && (weeksToRace < 16 || weeksToRace > 24);
+
+  function handleConfirm() {
+    if (!newRaceValid) return;
+    if (racePast) {
+      onConfirm({
+        goal_race: goalEdit.goal_race,
+        goal_time_seconds: goalEdit.goal_time_seconds,
+        goal_race_date: goalEdit.goal_race_date,
+      });
+    } else {
+      onConfirm();
+    }
+  }
 
   // Auto-detect run/walk trigger from assessment
   const shouldRunWalk = isBeginner && (
@@ -841,6 +889,58 @@ function PreGenerationModal({ athlete, genOverrides, setGenOverrides, onConfirm,
             <span className="text-smoke text-xs">({athlete.weekly_km || 0} km/week)</span>
           </div>
         </div>
+
+        {/* Past-race goal update */}
+        {racePast && (
+          <div className="mb-4 p-4 border border-orange-500/40 bg-orange-500/5">
+            <h4 className="font-display text-sm text-orange-400 mb-1">RACE DATE HAS PASSED</h4>
+            <p className="text-smoke text-xs mb-3">
+              Previous race was {athlete.goal_race_date}. Set a new goal to generate the next plan.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <p className="text-smoke text-xs uppercase mb-1">Goal Race</p>
+                <div className="flex gap-2 flex-wrap">
+                  {RACES.map(r => (
+                    <button
+                      key={r}
+                      onClick={() => setGoalEdit(g => ({ ...g, goal_race: r }))}
+                      className={`px-3 py-1 text-xs font-bold uppercase tracking-wider border ${
+                        goalEdit.goal_race === r
+                          ? 'bg-volt text-carbon border-volt'
+                          : 'border-ash text-smoke hover:border-volt hover:text-volt'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-smoke text-xs uppercase mb-1">New Race Date</p>
+                  <input
+                    type="date"
+                    min={todayISO()}
+                    className="input-field w-full"
+                    value={goalEdit.goal_race_date}
+                    onChange={e => setGoalEdit(g => ({ ...g, goal_race_date: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <p className="text-smoke text-xs uppercase mb-1">Target Time (optional)</p>
+                  <GoalTimeInput
+                    value={goalEdit.goal_time_seconds}
+                    onChange={s => setGoalEdit(g => ({ ...g, goal_time_seconds: s }))}
+                  />
+                </div>
+              </div>
+              {goalEdit.goal_race_date && isPastDate(goalEdit.goal_race_date) && (
+                <p className="text-red-400 text-xs">New race date must be in the future.</p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Plan Duration */}
         <div className="mb-4">
@@ -1073,13 +1173,44 @@ function PreGenerationModal({ athlete, genOverrides, setGenOverrides, onConfirm,
           <button onClick={onClose} className="btn-ghost px-4 py-2 text-sm">
             CANCEL
           </button>
-          <button onClick={onConfirm} className="btn-primary flex items-center gap-2 px-6 py-2">
+          <button
+            onClick={handleConfirm}
+            disabled={!newRaceValid}
+            className={`btn-primary flex items-center gap-2 px-6 py-2 ${!newRaceValid ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title={!newRaceValid ? 'Set a future race date to continue' : ''}
+          >
             <Zap size={16} />
             GENERATE PLAN
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+function GoalTimeInput({ value, onChange }) {
+  const [display, setDisplay] = useState(value ? formatTime(value) : '');
+  const focused = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current) setDisplay(value ? formatTime(value) : '');
+  }, [value]);
+
+  return (
+    <input
+      type="text"
+      className="input-field w-full"
+      placeholder="H:MM:SS"
+      value={display}
+      onFocus={() => { focused.current = true; }}
+      onChange={e => setDisplay(e.target.value)}
+      onBlur={e => {
+        focused.current = false;
+        const seconds = parseTime(e.target.value);
+        onChange(seconds || null);
+        setDisplay(seconds ? formatTime(seconds) : e.target.value);
+      }}
+    />
   );
 }
 
